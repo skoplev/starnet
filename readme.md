@@ -1,4 +1,9 @@
-#Data on Minerva
+# Cross-tissue project
+
+This is the main project repository for STARNET cross-tissue analyses.
+
+
+# Data access on Minerva
 
 ## Aligned data
 Oscars alignment (STAR) and counts (HT-seq) of STARNET data:

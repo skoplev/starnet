@@ -16,14 +16,24 @@ options(stringsAsFactors = FALSE)
 
 enableWGCNAThreads(nThreads=2)  # assuming 2 threads per core
 
-setwd("/Users/sk/Google Drive/projects/cross-tissue/co-expression")
 
-# source("../src/parse.r")
+# User input
+beta = 2.41  # power determined for each individual tissue
+data_dir = "/Users/sk/DataProjects/cross-tissue"  # root of data directory
+setwd("/Users/sk/Google Drive/projects/cross-tissue")
+
+
+# Overwrites blockwiseModules() function from WGCNA
+# to avoid overflow errors for inputs expression matrices with many genes.
+# line 738 (and other lines) changed to:
+# if (sum(as.numeric(modGenes)) - sum(as.numeric(reassign)) < minModuleSize) 
+source("lib/WGCNA/R/blockwiseModulesC.R")
+environment(blockwiseModules) = asNamespace("WGCNA")  # attach function to namespace
+
+setwd("co-expression")
 
 # Loads expr_recast data frame with tissue-specific expression
-load("/Users/sk/DataProjects/cross-tissue/STARNET/gene_exp_norm_reshape/expr_recast.RData")
-
-beta = 2.41  # power determined for each individual tissue
+load(file.path(data_dir, "STARNET/gene_exp_norm_reshape/expr_recast.RData"))
 
 # # Count missing values 
 # missing_values = apply(expr_recast, 1, function(row) sum(is.na(row)))
@@ -43,23 +53,25 @@ colnames(mat) = colnames(expr_recast)[3:ncol(expr_recast)]
 message("missing data fraction: ", sum(is.na(mat))/(nrow(mat) * ncol(mat)))
 
 # Standardize expression data
+
+# mat = t(mat)
 mat = scale(t(mat))
 mat[is.na(mat)] = 0.0  # impute to average
 
-
 # Random sample of data, for running on subset of data
-# feature_idx = sample(1:ncol(mat), 20000)
+# feature_idx = sample(1:ncol(mat), 1000)
 
-dir.create("TOMs")  # directory for data
+dir.create(file.path(data_dir, "TOMs"))  # directory for data
 bwnet = blockwiseModules(
 	mat,
 	# mat[,feature_idx],
 	power=beta,
+	randomSeed=42000,
 	maxBlockSize=20000,
 	nThreads=2,
 	saveTOMs=TRUE,
-	saveTOMFileBase="TOMs/TOM",
-	verbose=5
+	saveTOMFileBase=file.path(data_dir, "TOMs/TOM"),
+	verbose=2
 )
 
 # Load TOM into environment

@@ -74,9 +74,16 @@ bwnet = blockwiseModules(
 	verbose=2
 )
 
-# Load TOM into environment
+# Store modules in data directory
+dir.create(file.path(data_dir, "modules"))
+save(bwnet, row_meta, file=file.path(data_dir, "modules", "cross-tissue.RData"))
+
+
+
+# Load topological overlap matrix (TOM) into environment.
+# a dist object.
 tom1 = new.env()
-load("TOMs/TOM-block.2.RData", tom1)
+load(file.path(data_dir, "TOMs/TOM-block.1.RData"), tom1)
 
 # library(igraph)
 library(emdbook)  # for lseq
@@ -103,33 +110,7 @@ magplot(log10(k), log10(1 - deg_cdf(k)),
 	unlog="xy")
 
 
-# bwnet$blockGenes
-# Gene block tissue composition
-block_tissue_comp = lapply(bwnet$blockGenes, function(idx) {
-	idx = feature_idx[idx]  # translate to subset
-	tissue = row_meta$tissue[idx]
-	return(table(tissue))
-})
 
-modules = as.integer(factor(bwnet$colors))
-
-table(modules)
-
-# i = 24
-module_tissue_comp = lapply(1:length(unique(modules)), function(i) {
-	# row_meta[feature_idx[modules == i], ]
-	tissue = row_meta$tissue[feature_idx[modules == i]]
-	return(table(tissue))
-})
-
-# Heatmap of eigen
-library(gplots)
-x = as.matrix(bwnet$MEs)
-heatmap.2(
-	x,
-	trace="none",
-	col=colorRampPalette(brewer.pal(9, "RdBu"))(100)
-)
 
 # bwLabels = matchLabels(bwnet$colors, moduleLabels)
 # plotDendroAndColors(bwnet$dendrograms[[1]], bwModuleColors[bwnet$blockGenes[[1]]],

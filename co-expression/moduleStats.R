@@ -1,7 +1,15 @@
+rm(list=ls())
+
+# Analysis of modules
 library(reshape2)
 library(RColorBrewer)
 library(gplots)
+library(magicaxis)
 
+data_dir = "/Users/sk/DataProjects/cross-tissue"  # root of data directory
+setwd("/Users/sk/Google Drive/projects/cross-tissue")
+
+source("co-expression/base.R")
 
 # Load gwnet and row_meta tables
 load(file.path(data_dir, "modules/cross-tissue.RData"))
@@ -10,19 +18,10 @@ load(file.path(data_dir, "modules/cross-tissue.RData"))
 tissue_col = brewer.pal(9, "Pastel1")
 # tissue_col = brewer.pal(9, "Set1")
 
-
-# List of counts to matrix of counts
-# Note that tables must not be named, which can happen implicitly.
-countMat = function(count_list) {
-	mat = dcast(melt(count_list), L1~Var1, value.var="value")
-	mat = mat[, 2:ncol(mat)]
-	mat = as.matrix(mat)
-	mat[is.na(mat)] = 0  # zero counts
-	mat = t(mat)
-	return(mat)
-}
+modules = as.integer(factor(bwnet$colors))  # the modules detected
 
 
+# Calculate module frequency statistics
 # Gene block tissue composition
 block_tissue_comp = lapply(bwnet$blockGenes, function(idx) {
 	# tissue2 = row_meta$tissue[idx]
@@ -41,22 +40,15 @@ block_tissue = countMat(block_tissue_comp)
 module_tissue = countMat(module_tissue_comp)
 # module_tissue = module_tissue[, apply(module_tissue, 2, sum) < 500]
 
-module_size = apply(module_tissue, 2, sum)
-frac_secondary = 1 - apply(module_tissue, 2, max) / apply(module_tissue, 2, sum)
+# module_size = apply(module_tissue, 2, sum)
+# frac_secondary = 1 - apply(module_tissue, 2, max) / apply(module_tissue, 2, sum)
 
-entropy = function(x) {
-	x = x[x != 0]  # exclude zero
-	H = -sum(x * log10(x))
-	return(H)
-}
-
-
-# Calculate tissue entropy
-tissue_entropy = apply(module_tissue_freq, 2, entropy)
 
 # Calculate tissue frequencies
 module_tissue_freq = sweep(module_tissue, 2, apply(module_tissue, 2, sum), "/")
 
+# Calculate tissue entropy
+tissue_entropy = apply(module_tissue_freq, 2, entropy)
 
 hc = hclust(dist(t(module_tissue_freq)))
 
@@ -67,8 +59,6 @@ sel_modules = tissue_entropy > min_entro & !exclude
 # Hierarcical cluster of tissue frequencies for all modules
 # Used to organize barplots
 hc_sel = hclust(dist(t(module_tissue_freq[,sel_modules])))
-
-
 
 
 svg("plots/cross-tissue-overview.svg")
@@ -135,23 +125,3 @@ heatmap.2(
 	breaks=seq(-alpha, alpha, length.out=101)  # cap of coloring 
 )
 dev.off()
-
-
-
-
-
-plot(frac_secondary, log10(module_size))
-
-barplot(module_tissue, col=tissue_col)
-
-
-barplot(block_tissue_comp_mat)
-	
-barplot(block_tissue_comp)
-
-# do.call(rbind, block_tissue_comp)
-# merge(block_tissue_comp[[1]], block_tissue_comp[[2]])
-
-modules = as.integer(factor(bwnet$colors))
-# table(modules)
-

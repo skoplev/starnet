@@ -48,6 +48,7 @@ mat = expr_recast[, 3:ncol(expr_recast)]
 row_meta = expr_recast[, 1:2]
 # rownames(mat) = expr_recast$transcript_id
 colnames(mat) = colnames(expr_recast)[3:ncol(expr_recast)]
+patient_ids = colnames(mat)
 
 # Missing data
 message("missing data fraction: ", sum(is.na(mat))/(nrow(mat) * ncol(mat)))
@@ -76,8 +77,9 @@ bwnet = blockwiseModules(
 
 # Store modules in data directory
 dir.create(file.path(data_dir, "modules"))
-save(bwnet, row_meta, file=file.path(data_dir, "modules", "cross-tissue.RData"))
 
+# Store module data
+save(bwnet, row_meta, patient_ids, file=file.path(data_dir, "modules", "cross-tissue.RData"))
 
 
 # Load topological overlap matrix (TOM) into environment.

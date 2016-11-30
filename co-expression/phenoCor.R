@@ -6,22 +6,108 @@ library(RColorBrewer)
 library(gplots)
 library(magicaxis)
 library(devtools)
+library(qvalue)
+library(VennDiagram)
 
 # heatmap.3
 source_url("https://raw.githubusercontent.com/obigriffith/biostar-tutorials/master/Heatmaps/heatmap.3.R")
-
 
 data_dir = "/Users/sk/DataProjects/cross-tissue"  # root of data directory
 setwd("/Users/sk/Google Drive/projects/cross-tissue")
 
 source("co-expression/base.R")
 
-# Load gwnet and row_meta tables
-load(file.path(data_dir, "modules/cross-tissue.RData"))
+# Fits multivariate linear model for each phenotype based the eigengenes
+# Input matrices are required to be sample matched.
+# Samples in rows, features in columns
+fitLinearEigenPheno = function(
+	phenotype,
+	module_eigengenes,
+	exclude_phenotypes=c("starnet.ID", "id"))
+{
+	phenotype = as.data.frame(phenotype)  # if data.table
+	module_eigengenes = as.data.frame(module_eigengenes)
+
+	stopifnot(nrow(phenotype) == nrow(module_eigengenes))
+
+	# Exclude phenotype columns
+	phenotype = phenotype[, !colnames(phenotype) %in% exclude_phenotypes]
+
+	# Fit linear models of eigengenes vs phenotype.
+	fits = list()
+	for (pfeat in colnames(phenotype)) {
+		message("Fitting ", pfeat)
+
+		# Make target~input data frame
+		df = cbind(phenotype[[pfeat]], module_eigengenes)
+		if (length(levels(factor(df[,1]))) == 2) {
+			# {-1, 1} dummy encoding for binomial categorical variables
+			df[,1] = as.integer(factor(df[,1])) * 2 - 3
+		}
+
+		# exclude samples with missing target variable
+		df = df[!is.na(df[,1]), ]
+		df = data.frame(df)  # ensure same length? (don't know why it is necessary)
+
+		tryCatch({
+			# Linear fit formula comparing
+			first_rest_form = as.formula(
+				paste(colnames(df)[1], "~", 
+					paste(colnames(df)[2:ncol(df)], collapse="+")
+				)
+			)
+
+			# first vs rest linear fit
+			fits[[pfeat]] = lm(first_rest_form, data=df)
+		}, error=function(e) {
+			# Warning for failed linear fits
+			warning(pfeat, " excluded.")
+		})
+	}
+
+	return(fits)
+}
+
+# Get pmat matrix from list of linear fits
+getPmat = function(fits, remove_intercept=TRUE) {
+	# number of parameters
+	pars = sapply(fits, function(fit) {
+		nrow(summary(fit)$coef)
+	})
+
+	# exclude fits without the correct number of coefficients
+	# 
+	warnings("Excluding ", names(which(pars != median(pars))))
+	fits = fits[pars == median(pars)]
+
+	pmat = sapply(fits, function(fit) {
+		summary(fit)$coef[,4]
+	})
+
+	if (remove_intercept) {
+		pmat = pmat[!rownames(pmat) %in% "(Intercept)", ]
+	}
+	return(pmat)
+}
+
+
+# filter matrix such that it contains at least one row or column lower than alpha
+# Used for p-value matrix filtering.
+filterMatRowColMin = function(mat, alpha) {
+	include_row = apply(mat, 1, min) < alpha
+	include_col = apply(mat, 2, min) < alpha
+	return(mat[include_row, include_col])
+}
+
 
 # tissue_col = brewer.pal(9, "Pastel1")  # tissue colors
 tissue_col = brewer.pal(9, "Set1")  # tissue colors
-modules = as.integer(factor(bwnet$colors))  # the modules detected
+
+# Load gwnet and row_meta tables
+load(file.path(data_dir, "modules/cross-tissue.RData"))
+modules = as.integer(factor(bwnet$colors))  # the module assignment for each gene-tissue pair
+# Rename modules to numbers
+# colnames(bwnet$MEs) = 1:ncol(bwnet$MEs)
 
 
 # Loads expr_recast data frame with tissue-specific expression
@@ -42,14 +128,13 @@ module_tissue = countMat(module_tissue_comp)
 module_tissue_freq = sweep(module_tissue, 2, apply(module_tissue, 2, sum), "/")
 
 
-# Module eigengenes, test if sample names are correct
-
 # Load STARNET phenotype data
 pheno = fread(file.path(
 	"/Volumes/SANDY/phenotype_data",
 	"STARNET_main_phenotype_table.cases.Feb_29_2016.tbl"
 ))
 
+# Load Brainshake phenotype data
 brainshake = fread(file.path(
 	"/Volumes/SANDY/phenotype_data",
 	"tz.mat"
@@ -57,6 +142,116 @@ brainshake = fread(file.path(
 
 # Match phenotype to sample order
 pheno_matched = pheno[match(patient_ids, pheno$starnet.ID), ]
+
+
+
+
+# False discovery rates for linear regression coefficients
+fdr = 0.2
+alpha = 0.001  # nomical minimum p-value to consider clinical feature and eigengene
+
+# Fit linear models, eigengenes->phenotype
+# --------------------------------------------------
+
+fits_pheno = fitLinearEigenPheno(pheno_matched, bwnet$MEs)
+# summary(fits_pheno[["Age"]])
+
+# Get matrix of coefficient p values
+pmat = getPmat(fits_pheno)
+rownames(pmat) = 1:nrow(pmat)  # module# rename
+
+# q-values for control of FDR
+qmat = qvalue(pmat)$lfdr
+
+# mat = filterMatRowColMin(qmat, fdr)
+mat = filterMatRowColMin(pmat, alpha)
+
+# Make colors for tissue frequencies
+include_module_pheno = as.integer(rownames(mat))
+rlab = freqTissueColor(module_tissue_freq[,include_module_pheno], tissue_col)
+rownames(rlab) = rownames(module_tissue_freq)
+
+# Plot heatmap of significance
+pdf("co-expression/plots/pheno-eigengene.pdf")
+heatmap.3(
+	-log10(t(mat)),
+	trace="none",
+	col=colorRampPalette(brewer.pal(9, "Blues"))(100),
+	breaks=seq(0, 4, length.out=101),  # cap of coloring 
+	ColSideColors=t(rlab),
+	ColSideColorsSize=5,
+	margins=c(6, 12),
+	keysize=0.9,
+	KeyValueName=expression("-log"[10] * " p"),
+	xlab="Module eigengene"
+)
+dev.off()
+
+
+# Brainshake regression model
+# -----------------------------------------------------------------
+fits_brainshake = fitLinearEigenPheno(brainshake_matched, bwnet$MEs)
+
+pmat_brainshake = getPmat(fits_brainshake)
+rownames(pmat_brainshake) = 1:nrow(pmat_brainshake)  # rename modules to numbers
+
+qmat_brainshake = qvalue(pmat_brainshake)$lfdr
+
+mat = filterMatRowColMin(pmat_brainshake, alpha)
+# mat = filterMatRowColMin(qmat_brainshake, fdr)
+
+# Make tissue frequency colors
+include_module_brainshake = as.integer(rownames(mat))
+rlab = freqTissueColor(module_tissue_freq[, include_module_brainshake], tissue_col)
+rownames(rlab) = rownames(module_tissue_freq)
+
+pdf("co-expression/plots/brainshake-eigengene.pdf", height=10)
+heatmap.3(
+	-log10(t(mat)),
+	trace="none",
+	col=colorRampPalette(brewer.pal(9, "Blues"))(100),
+	breaks=seq(0, 4, length.out=101),  # cap of coloring 
+	ColSideColors=t(rlab),
+	ColSideColorsSize=3,
+	margins=c(6, 12),
+	keysize=0.9,
+	KeyValueName=expression("-log"[10] * " p"),
+	xlab="Module eigengene"
+)
+dev.off()
+
+
+# Venn diagram of module associations
+# ----------------------------------------------------------
+# Disable log for Venn diagram plots
+futile.logger::flog.threshold(
+	futile.logger::ERROR,
+	name = "VennDiagramLogger")
+
+# Make Venn diagram of annotated modules
+venn = venn.diagram(
+	list(
+		Phenotype=include_module_pheno,
+		Brainshake=include_module_brainshake),
+	fill=brewer.pal(9, "Set1")[1:2],
+	alpha=0.15,
+	lwd=0.5,
+	cex=2,
+	main="Module associations",
+	filename=NULL)
+
+pdf("co-expression/plots/module_annot_venn.pdf")
+grid.draw(venn)
+dev.off()
+
+
+
+
+
+
+
+# Correlation analysis
+# ------------------------------------------------------------------
 
 # calculate all eigengene-phenotype correlations
 pheno_cor = cor(bwnet$MEs, pheno_matched, use="pairwise.complete.obs")
@@ -69,79 +264,6 @@ pheno_cor = pheno_cor[,
 # Exclude particular columns
 exclude_pheno_cols = c("starnet.ID")
 pheno_cor = pheno_cor[, !colnames(pheno_cor) %in% exclude_pheno_cols]
-
-
-
-# Fit linear models of eigengenes vs phenotype.
-fits = list()
-for (pfeat in colnames(pheno_matched)[2:ncol(pheno_matched)]) {
-	print(pfeat)
-
-	# Make target~input data frame
-	df = cbind(pheno_matched[[pfeat]], bwnet$MEs)
-	if (length(levels(factor(df[,1]))) == 2) {
-		# {-1, 1} dummy encoding for binomial categorical variables
-		df[,1] = as.integer(factor(df[,1])) * 2 - 3
-	}
-
-	# exclude samples with missing target variable
-	df = df[!is.na(df[,1]), ]
-	df = data.frame(df)  # ensure same length? (don't know why it is necessary)
-
-	try({
-		fits[[pfeat]] = lm(
-			# first vs rest
-			as.formula(
-				paste(colnames(df)[1], "~", 
-					paste(colnames(df)[2:ncol(df)], collapse="+")
-				)
-			),
-			data=df
-		)
-	})
-}
-
-
-# Get matrix of coefficient p values
-alpha = 0.001  # minimum p-value to consider clinical feature and eigengene
-# alpha = 0.01
-
-pmat = sapply(fits, function(fit) {
-	summary(fit)$coef[,4]
-})
-
-pmat = pmat[2:nrow(pmat),]  # remove intercept
-rownames(pmat) = 1:nrow(pmat)  # module#
-
-include_module = apply(pmat, 1, min) < alpha
-include_phenotype = apply(pmat, 2, min) < alpha
-pmat = pmat[include_module, include_phenotype]
-
-module_tissue_freq[,include_module]
-
-
-rlab = freqTissueColor(module_tissue_freq[,include_module], tissue_col)
-rownames(rlab) = rownames(module_tissue_freq)
-
-sub_freq = module_tissue_freq[,include_module]
-colnames(sub_freq) = names(which(include_module))
-
-pdf("co-expression/plots/pheno-eigengene.pdf")
-heatmap.3(
-	-log10(t(pmat)),
-	trace="none",
-	col=colorRampPalette(brewer.pal(9, "Blues"))(100),
-	breaks=seq(0, 5, length.out=101),  # cap of coloring 
-	ColSideColors=t(rlab),
-	# labCol=rownames(module_tissue_freq),
-	ColSideColorsSize=5,
-	margins=c(6, 12),
-	keysize=0.9,
-	KeyValueName=expression("-log"[10] * " p"),
-	xlab="Module eigengene"
-)
-dev.off()
-
 
 # Visualize phenotype eigengene correlations
 alpha=0.5
@@ -171,9 +293,8 @@ heatmap.2(
 
 
 
-
-# Sanity check
-# -------------------------------------
+# Sanity checks
+# ----------------------------------------------------------------
 mod_i = which.min(pheno_cor$HDL)
 
 plot(bwnet$MEs[,mod_i], pheno_matched$HDL)

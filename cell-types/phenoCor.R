@@ -23,23 +23,58 @@ pheno = fread(file.path(
 # Load CIBERSORT frequency data
 cibersort_freq = loadCibersortFreq(file.path(data_dir, "CIBERSORT/out_freq"))
 
+# Rename
+names(cibersort_freq) = sapply(
+	strsplit(names(cibersort_freq_matched), "[.]"),
+	function(x) x[4]
+)
+
+tissue_col = brewer.pal(9, "Set1")  # tissue colors
+
+
 cibersort_freq_matched = matchTrimCibersortFreq(cibersort_freq, pheno$starnet.ID)
 
 
-exclude_rows = c("starnet.ID")
-cmat = cor(pheno, cibersort_freq_matched[[1]],
-	use="pairwise.complete.obs")
+# cor_thresh = 0.15
+cor_thresh = 0.2
+for (i in 1:length(cibersort_freq_matched)) {
+	pdf(paste0("cell-types/plots/pheno-cor/", names(cibersort_freq_matched)[i], ".pdf"))
+	cmat = cor(pheno, cibersort_freq_matched[[i]],
+		use="pairwise.complete.obs")
 
-cmat = cmat[!rownames(cmat) %in% exclude_rows,]
+	cmat = cmat[!rownames(cmat) %in% exclude_rows,]
 
-apply(cmat, 1, function(row) all(is.na(row)))
+	# Filter out all NA rows and cols
+	cmat = cmat[
+		apply(cmat, 1, function(row) any(!is.na(row))),
+		apply(cmat, 2, function(col) any(!is.na(col)))
+	]
+
+	# Filter out minimum
+	cmat = cmat[
+		apply(cmat, 1, function(row) max(abs(row), na.rm=TRUE)) > cor_thresh,
+		apply(cmat, 2, function(col) max(abs(col), na.rm=TRUE)) > cor_thresh
+	]
+
+	cmat[is.na(cmat)] = 0.0
+	cmat = t(cmat)
+
+	heatmap.2(cmat,
+		trace="none",
+		col=colorRampPalette(rev(brewer.pal(9, "RdBu")))(100),
+		breaks=seq(-0.5, 0.5, length.out=101),  # cap of coloring 
+		mar=c(10, 16),
+		cexRow=0.7,
+		main=names(cibersort_freq_matched)[i]
+	)
+	dev.off()
+}
 
 
-cmat[is.na(cmat)] = 0.0
+fits_pheno = fitLinearEigenPheno(pheno, cibersort_freq_matched[[1]])
 
-heatmap.2(cmat,
-	trace="none",
-	col=colorRampPalette(brewer.pal(9, "RdBu"))(100))
+
+
 
 
 pdf("cell-types/plots/cibersort_pheno.pdf",
@@ -85,7 +120,7 @@ plotPhenoCibersortCor(pheno, cibersort_freq_matched,
 )
 
 
-plotCor = function(x, y, ... ) {
+plotCor = function(x, y, main="", ... ) {
 	fit = lm(y~x)
 	coef(fit)
 	summary(fit)
@@ -93,41 +128,92 @@ plotCor = function(x, y, ... ) {
  	cor_test = cor.test(x, y)
 
 	plot(x, y, cex=0.7, pch=16,
-		main=round(cor_test$p.value, 5),
+		main=paste0(main, " p=", format(cor_test$p.value, digits=3, scientific=TRUE)),
 		...)
-	abline(coef=coef(fit), col="red")
+	abline(coef=coef(fit), col="black", lwd=1.5)
 }
 
 # x = cibersort_freq_matched[[1]][["bone marrow:granulocyte macrophage progenitor"]]
 # y = pheno$syntax_score
 
+
+svg("cell-types/plots/cor_sel.svg", width=4)
+
+par(mfrow=c(3, 2))
+
 cell_type = "bone marrow:granulocyte macrophage progenitor"
 phenotype = "syntax_score"
+i = 1  # AOR
 plotCor(
-	cibersort_freq_matched[[1]][[cell_type]],
+	cibersort_freq_matched[[i]][[cell_type]],
 	pheno[[phenotype]],
+	main=names(cibersort_freq_matched)[i],
 	xlab=cell_type,
+	col=tissue_col[i],
+	ylab=phenotype
+)
+
+cell_type = "coronary artery:smooth muscle cell"
+phenotype = "syntax_score"
+i = 4
+plotCor(
+	cibersort_freq_matched[[i]][[cell_type]],
+	pheno[[phenotype]],
+	main=names(cibersort_freq_matched)[i],
+	xlab=cell_type,
+	col=tissue_col[i],
 	ylab=phenotype
 )
 
 cell_type = "blood:dendritic cell, myeloid, immature"
 cell_type = "blood:macrophage"
 phenotype = "BMI"
+i = 9
 plotCor(
-	cibersort_freq_matched[[9]][[cell_type]],
+	cibersort_freq_matched[[i]][[cell_type]],
 	pheno[[phenotype]],
+	main=names(cibersort_freq_matched)[i],
+	xlab=cell_type,
+	ylab=phenotype
+)
+
+cell_type = "blood:monocyte"
+phenotype = "Age"
+i = 2
+plotCor(
+	cibersort_freq_matched[[i]][[cell_type]],
+	pheno[[phenotype]],
+	main=names(cibersort_freq_matched)[i],
+	xlab=cell_type,
+	ylab=phenotype
+)
+
+cell_type = "blood:natural killer cell"
+phenotype = "Smoking.Years"
+i = 2
+plotCor(
+	cibersort_freq_matched[[i]][[cell_type]],
+	as.numeric(pheno[[phenotype]]),
+	main=names(cibersort_freq_matched)[i],
 	xlab=cell_type,
 	ylab=phenotype
 )
 
 
+cell_type = "blood:neutrophil"
+phenotype = "LDL"
+i = 2
+plotCor(
+	cibersort_freq_matched[[i]][[cell_type]],
+	as.numeric(pheno[[phenotype]]),
+	main=names(cibersort_freq_matched)[i],
+	xlab=cell_type,
+	ylab=phenotype
+)
+
+dev.off()
 
 
-plot(
-	cibersort_freq_matched[[9]][["blood:dendritic cell, myeloid, immature"]],
-	pheno$BMI)
-
-plot(cibersort_freq_matched[[9]][["blood:macrophage"]], pheno$BMI)
 
 
 cor.test(cibersort_freq_matched[[1]][["bone marrow:granulocyte macrophage progenitor"]], pheno_matched$syntax_score, use="pairwise.complete.obs")

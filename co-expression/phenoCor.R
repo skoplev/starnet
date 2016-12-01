@@ -103,6 +103,13 @@ filterMatRowColMin = function(mat, alpha) {
 # tissue_col = brewer.pal(9, "Pastel1")  # tissue colors
 tissue_col = brewer.pal(9, "Set1")  # tissue colors
 
+# False discovery rates for linear regression coefficients
+fdr = 0.2
+alpha = 0.001  # nomical minimum p-value to consider clinical feature and eigengene
+
+
+# Load data
+# -------------------------------------------------------------
 # Load gwnet and row_meta tables
 load(file.path(data_dir, "modules/cross-tissue.RData"))
 modules = as.integer(factor(bwnet$colors))  # the module assignment for each gene-tissue pair
@@ -127,7 +134,6 @@ module_tissue = countMat(module_tissue_comp)
 # Calculate tissue frequencies
 module_tissue_freq = sweep(module_tissue, 2, apply(module_tissue, 2, sum), "/")
 
-
 # Load STARNET phenotype data
 pheno = fread(file.path(
 	"/Volumes/SANDY/phenotype_data",
@@ -142,13 +148,8 @@ brainshake = fread(file.path(
 
 # Match phenotype to sample order
 pheno_matched = pheno[match(patient_ids, pheno$starnet.ID), ]
+brainshake_matched = brainshake[match(patient_ids, brainshake$id), ]
 
-
-
-
-# False discovery rates for linear regression coefficients
-fdr = 0.2
-alpha = 0.001  # nomical minimum p-value to consider clinical feature and eigengene
 
 # Fit linear models, eigengenes->phenotype
 # --------------------------------------------------
@@ -245,11 +246,6 @@ grid.draw(venn)
 dev.off()
 
 
-
-
-
-
-
 # Correlation analysis
 # ------------------------------------------------------------------
 
@@ -276,7 +272,6 @@ heatmap.2(
 
 
 # BRAINSHAKE correlations
-brainshake_matched = brainshake[match(patient_ids, brainshake$id), ]
 brainshake_cor = cor(bwnet$MEs, brainshake_matched, use="pairwise.complete.obs")
 brainshake_cor = as.data.frame(brainshake_cor)
 brainshake_cor = brainshake_cor[, 

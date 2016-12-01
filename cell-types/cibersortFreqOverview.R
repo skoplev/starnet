@@ -21,14 +21,13 @@ tissue = sapply(
 tissue = factor(tissue)
 
 
-
 # Heatmap of all tissue samples
 # -----------------------------------------------------
 colors = c(brewer.pal(9, "Set1"), brewer.pal(8, "Set2"))
 sample_col = colors[as.integer(tissue)]
 
-sd_thresh = 0.005
-# sd_thresh = 0.01
+# sd_thresh = 0.005
+sd_thresh = 0.01
 # sd_thresh = 0.015
 # sd_thresh = 0.02
 
@@ -41,7 +40,7 @@ mat = scale(mat)
 
 mat = t(mat)
 
-pdf("cell-types/plots/cell_type_freq_heatmap.pdf")
+pdf("cell-types/plots/cell_type_freq_heatmap2.pdf")
 heatmap.2(mat,
 	trace="none",
 
@@ -52,11 +51,13 @@ heatmap.2(mat,
 	breaks=seq(-4, 4, length.out=101),  # cap of coloring 
 
 	ColSideColors=sample_col,
-	cexRow=0.4,
-	margins=c(8, 16),
+	# cexRow=0.4,
+	# cexRow=0.7,
+	margins=c(8, 18),
 	xlab="Tissue samples",
-	labCol=""
-	)
-
+	labCol="",
+	key.xlab="Frequency z-score",
+	key.title=NA
+)
 legend("topright", col=colors, pch=15, legend=levels(tissue), cex=0.5)
 dev.off()

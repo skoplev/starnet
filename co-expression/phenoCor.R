@@ -15,7 +15,9 @@ source_url("https://raw.githubusercontent.com/obigriffith/biostar-tutorials/mast
 data_dir = "/Users/sk/DataProjects/cross-tissue"  # root of data directory
 setwd("/Users/sk/Google Drive/projects/cross-tissue")
 
-source("co-expression/base.R")
+source("src/base.R")
+source("src/parse/io.R")
+
 
 # Fits multivariate linear model for each phenotype based the eigengenes
 # Input matrices are required to be sample matched.
@@ -146,9 +148,14 @@ brainshake = fread(file.path(
 	"tz.mat"
 ))
 
+# Load CIBERSORT frequency data
+cibersort_freq = loadCibersortFreq(file.path(data_dir, "CIBERSORT/out_freq"))
+
 # Match phenotype to sample order
 pheno_matched = pheno[match(patient_ids, pheno$starnet.ID), ]
 brainshake_matched = brainshake[match(patient_ids, brainshake$id), ]
+
+cibersort_freq_matched = matchTrimCibersortFreq(cibersort_freq, patient_ids)
 
 
 # Fit linear models, eigengenes->phenotype
@@ -248,6 +255,7 @@ dev.off()
 
 # Correlation analysis
 # ------------------------------------------------------------------
+
 
 # calculate all eigengene-phenotype correlations
 pheno_cor = cor(bwnet$MEs, pheno_matched, use="pairwise.complete.obs")

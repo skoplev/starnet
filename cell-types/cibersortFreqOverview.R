@@ -5,30 +5,10 @@ data_dir = "/Users/sk/DataProjects/cross-tissue"  # root of data directory
 setwd("/Users/sk/Google Drive/projects/cross-tissue")
 
 source("co-expression/base.R")
+source("parse/io.R")
 
-freq = list()
-for (file_name in list.files(file.path(data_dir, "CIBERSORT/out_freq"), pattern="*.tsv")) {
-	message(file_name)
-	file_path = file.path(data_dir, "CIBERSORT/out_freq", file_name)
-
-	# Read data without header
-	d = fread(
-		file_path,
-		header=FALSE,
-		skip=1
-	)
-
-	# Read and parse first line as header
-	headers = strsplit(
-		readLines(file_path, n=1),
-		"\t"
-	)[[1]]
-
-	colnames(d) = c("tissue_patient_id", headers)
-
-	# save in list
-	freq[[file_name]] = d
-}
+# Load CIBERSORT frequency data
+freq = loadCibersortFreq(file.path(data_dir, "CIBERSORT/out_freq"))
 
 all_freq = do.call(rbind, freq)
 
@@ -39,6 +19,7 @@ tissue = sapply(
 	function(x) x[1]
 )
 tissue = factor(tissue)
+
 
 
 # Heatmap of all tissue samples

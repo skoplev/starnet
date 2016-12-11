@@ -68,7 +68,21 @@ expr_mats = lapply(expr_files, function(file_name) {
 })
 names(expr_mats) = expr_files
 
+# Load phenotype and covariate data for batch correction
+
+pheno = fread(file.path(
+	"/Volumes/SANDY/phenotype_data",
+	"STARNET_main_phenotype_table.cases.Feb_29_2016.tbl"
+))
+
+covar = fread(file.path(
+	"/Volumes/SANDY/phenotype_data",
+	"covariates.cases_and_controls.April_12_2016.txt"
+))
+
+
 # Normalize using size factors from DESeq2
+# ---------------------------------------------------------------
 # converts $id to rownames of returned matrices
 expr_mats_norm = sapply(expr_mats, function(emat) {
 	# get numerical matrix
@@ -94,6 +108,70 @@ for (i in 1:length(expr_mats_norm)) {
 	)
 }
 # save(expr_mats_norm, file=file.path(data_dir, "STARNET/gene_exp_norm/all.RData"))
+
+# Batch correction, using read lengths 50 and 100 bp
+# Also filters based on standard deviation
+# ------------------------------------------------------
+# Variance filter and batch correction
+min_sd = 0.5
+expr_mats_batch = lapply(expr_mats_norm, function(mat) {
+	# Filter genes based on standard deviation
+	mat = mat[apply(mat, 1, sd, na.rm=T) > min_sd, ]
+
+	# Match phenotype data to selected gene expression matrix
+	patient_ids = sapply(
+		strsplit(colnames(mat), "_"),
+		function(x) x[2]
+	)
+
+	pheno_matched = pheno[match(patient_ids, pheno$starnet.ID), ]
+	covar_matched = covar[match(colnames(mat), covar$sample), ]
+
+	# Correct batch effects
+	# Model matrix taking into acount primariy covariates
+	options(na.action="na.pass")  # keep NA rows in model matrix
+	modcombat = model.matrix(~syntax_score + BMI + LDL + Age, data=pheno_matched)
+
+	# Impute model input to median
+	modcombat[is.na(modcombat[, 2]), 2] = median(modcombat[, 2], na.rm=T)  # syntax score
+	modcombat[is.na(modcombat[, 3]), 3] = median(modcombat[, 3], na.rm=T)  # BMI
+	modcombat[is.na(modcombat[, 4]), 4] = median(modcombat[, 4], na.rm=T)  # BMI
+	modcombat[is.na(modcombat[, 5]), 5] = median(modcombat[, 5], na.rm=T)  # BMI
+
+	# Identify batches
+	batch = covar_matched$read_length
+	if (all(is.na(batch))) {
+		batch[is.na(batch)] = 100  # default read length if all are missing
+	}
+	batch[is.na(batch)] = median(batch, na.rm=T)  # 
+
+	# Batch corrected expression matrix
+	tryCatch({
+		batch_mat = ComBat(mat,
+			batch=batch,
+			mod=modcombat  # model maintaining covariates
+		)
+		return(batch_mat)
+	}, error=function(e){
+		warning(e)
+		# Use expression matrix as batch corrected data
+		return(mat)
+	})
+})
+
+# Write normalized matrices as .tsv files
+dir.create(file.path(data_dir, "STARNET/gene_exp_norm_batch"))
+for (i in 1:length(expr_mats_batch)) {
+	message("writing ", names(expr_mats_batch)[i])
+
+	write.table(expr_mats_batch[[i]],
+		file.path(data_dir, "STARNET/gene_exp_norm_batch", names(expr_mats_batch)[i]),
+		sep="\t",
+		quote=FALSE, col.names=NA
+	)
+}
+save(expr_mats_batch, file=file.path(data_dir, "STARNET/gene_exp_norm_batch/all.RData"))
+
 
 # Rename row names to gene symbols, aggregate by summing multiple matches to gene symbol.
 # assumes that transcripts have associated gene symbols

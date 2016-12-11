@@ -65,9 +65,8 @@ expr_mats_batch = lapply(expr_mats_norm, function(mat) {
 	covar_matched = covar[match(colnames(mat), covar$sample), ]
 
 	# Correct batch effects
-	# modcombat = model.matrix(~1, data=pheno_matched)
-	options(na.action="na.pass")  # keep NA rows in model matrix
 	# Model matrix taking into acount primariy covariates
+	options(na.action="na.pass")  # keep NA rows in model matrix
 	modcombat = model.matrix(~syntax_score + BMI + LDL + Age, data=pheno_matched)
 
 	# Impute model input to median
@@ -95,22 +94,22 @@ expr_mats_batch = lapply(expr_mats_norm, function(mat) {
 		# Use expression matrix as batch corrected data
 		return(mat)
 	})
-	# return(batch_mat)
-
-	# # read length and <90 patient ids
-	# batch=factor(
-	# 	paste(covar_matched$read_length, covar_matched$subject <= 89)
-	# ),
-
-	# # Detect additional batches
-	# clust = kmeans(t(batch_mat), 3)
-	# # clust = kmeans(t(batch_mat), 10)
-
-	# batch_mat = ComBat(batch_mat,
-	# 	batch=clust$clust,
-	# 	mod=modcombat  # model to maintain
-	# )
 })
+
+
+# # read length and <90 patient ids
+# batch=factor(
+# 	paste(covar_matched$read_length, covar_matched$subject <= 89)
+# ),
+
+# # Detect additional batches
+# clust = kmeans(t(batch_mat), 3)
+# # clust = kmeans(t(batch_mat), 10)
+
+# batch_mat = ComBat(batch_mat,
+# 	batch=clust$clust,
+# 	mod=modcombat  # model to maintain
+# )
 
 
 # Run tSNE for each expression matrix
@@ -121,9 +120,7 @@ embed = mclapply(expr_mats_batch, function(mat) {
 }, mc.cores=3)
 
 
-
-
-# Selected phenotype
+# Selected phenotype for tSNE plots
 phenotype = "syntax_score"
 # phenotype = "BMI"
 # phenotype = "ID"
@@ -194,11 +191,7 @@ for (i in 1:length(expr_mats_batch)) {
 dev.off()
 
 
-# Plot color bars
-col_legend = colorGradient(seq(0, 100, length.out=100),
-	colors=rev(brewer.pal(9, "YlGnBu"))
-)
-
+# Plot color bars for selected tSNE plots
 pdf("pheno/plots/legends.pdf", width=4.0)
 par(mfrow=c(1, 2))
 plotColorBar(
@@ -219,14 +212,3 @@ plotColorBar(
 	# max=100,
 	title="STARNET ID")
 dev.off()
-
-
-image(1,
-	as.matrix(seq(0, 100, length.out=100)),
-	col=colorGradient(seq(0, 100, length.out=100),
-		colors=rev(brewer.pal(9, "Spectral"))
-	)
-)
-
-plot(c(0,2),c(0,1),type = 'n', axes = F,xlab = '', ylab = '', main = 'legend title')
-rasterImage(t(col_legend), 0, 0, 1, 1)

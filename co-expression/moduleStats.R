@@ -106,7 +106,6 @@ dev.off()
 # Heatmap of eigengenes
 x = as.matrix(bwnet$MEs)
 
-
 # heatmap.2(
 # 	x,
 # 	trace="none",

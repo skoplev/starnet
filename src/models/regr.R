@@ -75,7 +75,8 @@ getPmat = function(fits, remove_intercept=TRUE) {
 # filter matrix such that it contains at least one row or column lower than alpha
 # Used for p-value matrix filtering.
 filterMatRowColMin = function(mat, alpha) {
-	include_row = apply(mat, 1, min) < alpha
-	include_col = apply(mat, 2, min) < alpha
+	mat = as.matrix(mat)
+	include_row = apply(mat, 1, min, na.rm=TRUE) < alpha
+	include_col = apply(mat, 2, min, na.rm=TRUE) < alpha
 	return(mat[include_row, include_col])
 }

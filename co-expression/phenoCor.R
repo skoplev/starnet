@@ -8,6 +8,7 @@ library(magicaxis)
 library(devtools)
 library(qvalue)
 library(VennDiagram)
+library(data.table)
 
 # heatmap.3
 source_url("https://raw.githubusercontent.com/obigriffith/biostar-tutorials/master/Heatmaps/heatmap.3.R")
@@ -84,6 +85,12 @@ cibersort_freq_matched = matchTrimCibersortFreq(cibersort_freq, patient_ids)
 fits_pheno = fitLinearEigenPheno(pheno_matched, bwnet$MEs)
 # summary(fits_pheno[["Age"]])
 
+
+syntax_coef = summary(fits_pheno$syntax_score)$coef
+# rownames(syntax_coef)
+syntax_coef = syntax_coef[syntax_coef[,4] < 0.1, ]
+
+
 # Get matrix of coefficient p values
 pmat = getPmat(fits_pheno)
 rownames(pmat) = 1:nrow(pmat)  # module# rename
@@ -92,6 +99,7 @@ rownames(pmat) = 1:nrow(pmat)  # module# rename
 qmat = qvalue(pmat)$lfdr
 
 # mat = filterMatRowColMin(qmat, fdr)
+alpha = 0.05
 mat = filterMatRowColMin(pmat, alpha)
 
 # Make colors for tissue frequencies

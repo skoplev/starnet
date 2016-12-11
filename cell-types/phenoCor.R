@@ -31,9 +31,7 @@ names(cibersort_freq) = sapply(
 
 tissue_col = brewer.pal(9, "Set1")  # tissue colors
 
-
 cibersort_freq_matched = matchTrimCibersortFreq(cibersort_freq, pheno$starnet.ID)
-
 
 # cor_thresh = 0.15
 cor_thresh = 0.2
@@ -70,18 +68,10 @@ for (i in 1:length(cibersort_freq_matched)) {
 	dev.off()
 }
 
+# fits_pheno = fitLinearEigenPheno(pheno, cibersort_freq_matched[[1]])
 
-fits_pheno = fitLinearEigenPheno(pheno, cibersort_freq_matched[[1]])
-
-
-
-
-
-pdf("cell-types/plots/cibersort_pheno.pdf",
-	# width=4.5
-	width=10.0
-)
-
+# 
+pdf("cell-types/plots/cibersort_pheno.pdf", width=10.0)
 par(mfrow=c(2, 2))
 plotPhenoCibersortCor(pheno, cibersort_freq_matched,
 	phenotype="syntax_score", ciber_i=1, k=5, bar_col=brewer.pal(9, "Set1")[1]
@@ -138,9 +128,7 @@ plotCor = function(x, y, main="", ... ) {
 
 
 svg("cell-types/plots/cor_sel.svg", width=4)
-
 par(mfrow=c(3, 2))
-
 cell_type = "bone marrow:granulocyte macrophage progenitor"
 phenotype = "syntax_score"
 i = 1  # AOR
@@ -173,6 +161,7 @@ plotCor(
 	cibersort_freq_matched[[i]][[cell_type]],
 	pheno[[phenotype]],
 	main=names(cibersort_freq_matched)[i],
+	col=tissue_col[i],
 	xlab=cell_type,
 	ylab=phenotype
 )
@@ -184,6 +173,7 @@ plotCor(
 	cibersort_freq_matched[[i]][[cell_type]],
 	pheno[[phenotype]],
 	main=names(cibersort_freq_matched)[i],
+	col=tissue_col[i],
 	xlab=cell_type,
 	ylab=phenotype
 )
@@ -195,10 +185,10 @@ plotCor(
 	cibersort_freq_matched[[i]][[cell_type]],
 	as.numeric(pheno[[phenotype]]),
 	main=names(cibersort_freq_matched)[i],
+	col=tissue_col[i],
 	xlab=cell_type,
 	ylab=phenotype
 )
-
 
 cell_type = "blood:neutrophil"
 phenotype = "LDL"
@@ -207,13 +197,9 @@ plotCor(
 	cibersort_freq_matched[[i]][[cell_type]],
 	as.numeric(pheno[[phenotype]]),
 	main=names(cibersort_freq_matched)[i],
+	col=tissue_col[i],
 	xlab=cell_type,
 	ylab=phenotype
 )
-
 dev.off()
 
-
-
-
-cor.test(cibersort_freq_matched[[1]][["bone marrow:granulocyte macrophage progenitor"]], pheno_matched$syntax_score, use="pairwise.complete.obs")

@@ -98,3 +98,31 @@ plotPhenoCibersortCor = function(pheno_matched, cibersort_freq_matched,
 
 	return(cor_test)
 }
+
+# Linear color interpolation factory.
+colorGradient = function(x, gradlim=NULL, colors=c("red","yellow","green"), colsteps=100) {
+	pal = colorRampPalette(colors) (colsteps)  # the color palette
+	if (!is.null(gradlim)) {
+		return(
+			pal[findInterval(x, seq(gradlim[1], gradlim[2], length.out=colsteps), all.inside=TRUE)]
+		)
+	} else {
+		return(
+			pal[findInterval(x, seq(min(x, na.rm=TRUE), max(x, na.rm=TRUE), length.out=colsteps), all.inside=TRUE)]
+	 	)
+	}
+}
+
+
+# Function to plot color bar
+plotColorBar = function(lut, min, max=-min, nticks=11, ticks=seq(min, max, len=nticks), title='') {
+	scale = (length(lut)-1)/(max-min)
+
+	# dev.new(width=1.75, height=5)
+	plot(c(0,10), c(min,max), type='n', bty='n', xaxt='n', xlab='', yaxt='n', ylab='', main=title)
+	axis(2, ticks, las=1)
+	for (i in 1:(length(lut)-1)) {
+		y = (i-1)/scale + min
+		rect(0,y,10,y+1/scale, col=lut[i], border=NA)
+ 	}
+}

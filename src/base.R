@@ -125,3 +125,4 @@ plotColorBar = function(lut, min, max=-min, nticks=11, ticks=seq(min, max, len=n
 		rect(0,y,10,y+1/scale, col=lut[i], border=NA)
  	}
 }
+

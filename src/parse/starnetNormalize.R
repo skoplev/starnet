@@ -51,6 +51,28 @@ collapseMatSum = function(mat, row_ids) {
 }
 
 
+# Constructs model matrix from comma-separated vector of multinomial variables.
+# Each row is weighted to add to 1.
+multiCatModelMatrix = function(catvec)  {
+	catvec_sep = strsplit(catvec, ",")
+
+	catvec_uni = unique(unlist(catvec_sep))
+	catvec_uni = catvec_uni[!is.na(catvec_uni)]
+
+	model_mat = matrix(0, ncol=length(catvec_uni), nrow=ncol(mat))
+	colnames(model_mat) = catvec_uni
+	for (i in 1:length(catvec_sep)) {
+		model_mat[i, ] = catvec_uni %in% catvec_sep[[i]]
+	}
+
+	multiplicity = apply(model_mat, 1, sum)
+	multiplicity[multiplicity == 0] = 1  # avoid division by zero
+	model_mat = sweep(model_mat, 1, multiplicity, "/")
+
+	return(data.frame(model_mat))
+}
+
+
 data_dir = "/Users/sk/DataProjects/cross-tissue"
 
 # Directory containing expression count matrices
@@ -110,8 +132,9 @@ for (i in 1:length(expr_mats_norm)) {
 # save(expr_mats_norm, file=file.path(data_dir, "STARNET/gene_exp_norm/all.RData"))
 # load(file.path(data_dir, "STARNET/gene_exp_norm/all.RData"))
 
-# Batch correction, using read lengths 50 and 100 bp
-# Also filters based on standard deviation
+# Batch correction, using read lengths 50 and 100 bp, along with flowcell.
+# Technical batch correction and adjustments.
+# Also filters transcripts based on standard deviation
 # ------------------------------------------------------
 # Variance filter and batch correction
 min_sd = 0.5
@@ -128,20 +151,6 @@ expr_mats_batch = lapply(expr_mats_norm, function(mat) {
 	pheno_matched = pheno[match(patient_ids, pheno$starnet.ID), ]
 	covar_matched = covar[match(colnames(mat), covar$sample), ]
 
-	# Correct batch effects
-	# Model matrix taking into acount primariy covariates
-	options(na.action="na.pass")  # keep NA rows in model matrix
-
-	# modcombat = model.matrix(~syntax_score + BMI + LDL + Age, data=pheno_matched)
-
-	# # Impute model input to median
-	# modcombat[is.na(modcombat[, 2]), 2] = median(modcombat[, 2], na.rm=T)  # syntax score
-	# modcombat[is.na(modcombat[, 3]), 3] = median(modcombat[, 3], na.rm=T)  # BMI
-	# modcombat[is.na(modcombat[, 4]), 4] = median(modcombat[, 4], na.rm=T)  # BMI
-	# modcombat[is.na(modcombat[, 5]), 5] = median(modcombat[, 5], na.rm=T)  # BMI
-
-	modcombat = model.matrix(~1, data=pheno_matched)
-
 
 	# Identify batches
 	batch = covar_matched$read_length
@@ -150,12 +159,53 @@ expr_mats_batch = lapply(expr_mats_norm, function(mat) {
 	}
 	batch[is.na(batch)] = median(batch, na.rm=T)  # 
 
+	# Correct batch effects
+	# Model matrix taking into acount primariy covariates
+	options(na.action="na.pass")  # keep NA rows in model matrix
+
+	# modcombat = model.matrix(~syntax_score + BMI + LDL + Age, data=pheno_matched)
+	modcombat = model.matrix(~1 + flowcell, data=covar_matched)
+
+	flow_model = multiCatModelMatrix(covar_matched$flowcell)
+
+	# Remove flows with few samples
+	flow_model = flow_model[, apply(flow_model, 2, sum) > 5]
+
+	# Remove linear dependencies from flow_model using singular value decomposition
+	epsilon = 10^-6  # small value definition
+	flow_svd = svd(flow_model)
+
+	flow_model = flow_svd$u[ , flow_svd$d > epsilon]
+	flow_model = data.frame(flow_model)
+
+	# # Impute model input to median
+	# modcombat[is.na(modcombat[, 2]), 2] = median(modcombat[, 2], na.rm=T)  # syntax score
+	# modcombat[is.na(modcombat[, 3]), 3] = median(modcombat[, 3], na.rm=T)  # BMI
+	# modcombat[is.na(modcombat[, 4]), 4] = median(modcombat[, 4], na.rm=T)  # BMI
+	# modcombat[is.na(modcombat[, 5]), 5] = median(modcombat[, 5], na.rm=T)  # BMI
+
+	# modcombat = model.matrix(~1, data=pheno_matched)
+
+	# Remove linear dependencies between batch and flow_model
+	flow_model = flow_model[, cor(as.numeric(batch), flow_model) < 1 - epsilon]
+
+	# Construct covariate object from flow_model
+	modcombat = model.matrix(~1 + ., data=flow_model)
+
+	# all_model = cbind(batch, flow_model)
+	# mod = model.matrix(~1 + ., data=all_model)
+
 	# Batch corrected expression matrix
 	tryCatch({
 		batch_mat = ComBat(mat,
 			batch=batch,
-			mod=modcombat  # model maintaining covariates
+			mod=modcombat  # model with first column maintained and rest subtracted
 		)
+		# batch_mat = sva(mat,
+		# 	# batch=batch,
+		# 	mod=mod
+		# )
+
 		return(batch_mat)
 	}, error=function(e){
 		warning(e)
@@ -176,6 +226,14 @@ for (i in 1:length(expr_mats_batch)) {
 	)
 }
 save(expr_mats_batch, file=file.path(data_dir, "STARNET/gene_exp_norm_batch/all.RData"))
+
+
+
+# Correct for clinical covariates
+# --------------------------------------------------------------
+lapply(expr_mats_batch, function(mat) {
+	
+})
 
 
 # Collapse normalized gene expression matrices. Does not use the batch correction.

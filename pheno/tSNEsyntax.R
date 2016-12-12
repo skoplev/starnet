@@ -30,13 +30,12 @@ covar = fread(file.path(
 ))
 
 
-# expr_mats = lapply(list.files(file.path(data_dir, "STARNET/")))
-
-load(file.path(data_dir, "STARNET/gene_exp_norm/all.RData"))
+# Load batch corrected expression data
+load(file.path(data_dir, "STARNET/gene_exp_norm_batch/all.RData"))
 
 # Rename loaded normalized gene expression matrices
-names(expr_mats_norm) = sapply(
-	strsplit(names(expr_mats_norm), "[.]"),
+names(expr_mats_batch) = sapply(
+	strsplit(names(expr_mats_batch), "[.]"),
 	function(x) x[4]
 )
 
@@ -47,54 +46,6 @@ names(expr_mats_norm) = sapply(
 # 		function(x) x[2])
 # 	return(mat)
 # })
-
-
-# Variance filter and batch correction
-min_sd = 0.5
-expr_mats_batch = lapply(expr_mats_norm, function(mat) {
-	# Filter genes based on standard deviation
-	mat = mat[apply(mat, 1, sd, na.rm=T) > min_sd, ]
-
-	# Match phenotype data to selected gene expression matrix
-	patient_ids = sapply(
-		strsplit(colnames(mat), "_"),
-		function(x) x[2]
-	)
-
-	pheno_matched = pheno[match(patient_ids, pheno$starnet.ID), ]
-	covar_matched = covar[match(colnames(mat), covar$sample), ]
-
-	# Correct batch effects
-	# Model matrix taking into acount primariy covariates
-	options(na.action="na.pass")  # keep NA rows in model matrix
-	modcombat = model.matrix(~syntax_score + BMI + LDL + Age, data=pheno_matched)
-
-	# Impute model input to median
-	modcombat[is.na(modcombat[, 2]), 2] = median(modcombat[, 2], na.rm=T)  # syntax score
-	modcombat[is.na(modcombat[, 3]), 3] = median(modcombat[, 3], na.rm=T)  # BMI
-	modcombat[is.na(modcombat[, 4]), 4] = median(modcombat[, 4], na.rm=T)  # BMI
-	modcombat[is.na(modcombat[, 5]), 5] = median(modcombat[, 5], na.rm=T)  # BMI
-
-	# Identify batches
-	batch = covar_matched$read_length
-	if (all(is.na(batch))) {
-		batch[is.na(batch)] = 100  # default read length if all are missing
-	}
-	batch[is.na(batch)] = median(batch, na.rm=T)  # 
-
-	# Batch corrected expression matrix
-	tryCatch({
-		batch_mat = ComBat(mat,
-			batch=batch,
-			mod=modcombat  # model maintaining covariates
-		)
-		return(batch_mat)
-	}, error=function(e){
-		warning(e)
-		# Use expression matrix as batch corrected data
-		return(mat)
-	})
-})
 
 
 # # read length and <90 patient ids
@@ -121,8 +72,8 @@ embed = mclapply(expr_mats_batch, function(mat) {
 
 
 # Selected phenotype for tSNE plots
-phenotype = "syntax_score"
-# phenotype = "BMI"
+# phenotype = "syntax_score"
+phenotype = "BMI"
 # phenotype = "ID"
 # phenotype = "LDL"
 
@@ -159,7 +110,6 @@ for (i in 1:length(expr_mats_batch)) {
 		col = colorGradient(as.numeric(pheno_matched$LDL),
 			gradlim=range(pheno$LDL),
 			colors=rev(brewer.pal(9, "Spectral")))
-
 	} else if (phenotype == "BMI") {
 		# BMI
 		col = colorGradient(as.numeric(pheno_matched$BMI),
@@ -167,11 +117,14 @@ for (i in 1:length(expr_mats_batch)) {
 			colors=rev(brewer.pal(9, "Spectral")))
 	} else if (phenotype == "ID") {
 		col = colorGradient(
-			as.numeric(pheno_matched$starnet.ID),
-			colors=brewer.pal(9, "Spectral"))
+			gradlim=range(as.numeric(pheno$starnet.ID), na.rm=T),
+			# as.numeric(pheno_matched$starnet.ID),
+			as.numeric(covar_matched$subject),
+			colors=rev(brewer.pal(9, "Spectral")))
 	} else {
 		stop("Invalid phenotype")
 	}
+
 	# col=colorGradient(pheno_matched$DUKE, colors=rev(brewer.pal(9, "Spectral")))
 	# col=colorGradient(pheno_matched$lesions, colors=rev(brewer.pal(9, "Spectral")))
 	# col=colorGradient(as.numeric(pheno_matched$Smoking.Years), colors=rev(brewer.pal(9, "Spectral")))

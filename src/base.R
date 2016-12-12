@@ -113,7 +113,6 @@ colorGradient = function(x, gradlim=NULL, colors=c("red","yellow","green"), cols
 	}
 }
 
-
 # Function to plot color bar
 plotColorBar = function(lut, min, max=-min, nticks=11, ticks=seq(min, max, len=nticks), title='') {
 	scale = (length(lut)-1)/(max-min)

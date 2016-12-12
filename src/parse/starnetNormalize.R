@@ -108,6 +108,7 @@ for (i in 1:length(expr_mats_norm)) {
 	)
 }
 # save(expr_mats_norm, file=file.path(data_dir, "STARNET/gene_exp_norm/all.RData"))
+# load(file.path(data_dir, "STARNET/gene_exp_norm/all.RData"))
 
 # Batch correction, using read lengths 50 and 100 bp
 # Also filters based on standard deviation
@@ -130,13 +131,17 @@ expr_mats_batch = lapply(expr_mats_norm, function(mat) {
 	# Correct batch effects
 	# Model matrix taking into acount primariy covariates
 	options(na.action="na.pass")  # keep NA rows in model matrix
-	modcombat = model.matrix(~syntax_score + BMI + LDL + Age, data=pheno_matched)
 
-	# Impute model input to median
-	modcombat[is.na(modcombat[, 2]), 2] = median(modcombat[, 2], na.rm=T)  # syntax score
-	modcombat[is.na(modcombat[, 3]), 3] = median(modcombat[, 3], na.rm=T)  # BMI
-	modcombat[is.na(modcombat[, 4]), 4] = median(modcombat[, 4], na.rm=T)  # BMI
-	modcombat[is.na(modcombat[, 5]), 5] = median(modcombat[, 5], na.rm=T)  # BMI
+	# modcombat = model.matrix(~syntax_score + BMI + LDL + Age, data=pheno_matched)
+
+	# # Impute model input to median
+	# modcombat[is.na(modcombat[, 2]), 2] = median(modcombat[, 2], na.rm=T)  # syntax score
+	# modcombat[is.na(modcombat[, 3]), 3] = median(modcombat[, 3], na.rm=T)  # BMI
+	# modcombat[is.na(modcombat[, 4]), 4] = median(modcombat[, 4], na.rm=T)  # BMI
+	# modcombat[is.na(modcombat[, 5]), 5] = median(modcombat[, 5], na.rm=T)  # BMI
+
+	modcombat = model.matrix(~1, data=pheno_matched)
+
 
 	# Identify batches
 	batch = covar_matched$read_length
@@ -173,6 +178,8 @@ for (i in 1:length(expr_mats_batch)) {
 save(expr_mats_batch, file=file.path(data_dir, "STARNET/gene_exp_norm_batch/all.RData"))
 
 
+# Collapse normalized gene expression matrices. Does not use the batch correction.
+# -----------------------------------------------------------
 # Rename row names to gene symbols, aggregate by summing multiple matches to gene symbol.
 # assumes that transcripts have associated gene symbols
 expr_mats_collapsed = lapply(expr_mats_norm, function(mat) {

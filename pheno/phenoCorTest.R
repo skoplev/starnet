@@ -2,6 +2,7 @@ rm(list=ls())
 
 library(qvalue)
 library(devtools)
+library(RColorBrewer)
 
 # heatmap.3
 source_url("https://raw.githubusercontent.com/obigriffith/biostar-tutorials/master/Heatmaps/heatmap.3.R")
@@ -29,6 +30,7 @@ covar = fread(file.path(
 
 # Load batch corrected expression data
 load(file.path(data_dir, "STARNET/gene_exp_norm_batch/all.RData"))
+expr_mats_batch = expr_mats_batch[!is.na(expr_mats_batch)]  # remove missing entries
 
 # Rename loaded normalized gene expression matrices
 names(expr_mats_batch) = sapply(
@@ -104,14 +106,15 @@ save(syntax_cor, file=file.path(data_dir, "STARNET/pheno_cor/syntax_cor.RData"))
 
 # Count significant correlations at
 sig_cor = sapply(syntax_cor, function(x) {
-	# sum(x$qval < 0.2)
-	sum(x$pval < 0.001)
+	sum(x$qval < 0.2)
+	# sum(x$pval < 0.001)
 })
 names(sig_cor) = names(expr_mats_batch)
 
 
 pdf("pheno/plots/SYNTAX_cor_barplot.pdf", width=3.5, height=4)
 barplot(sig_cor[!names(sig_cor) %in% c("COR", "FOC", "MAC")],
+	main="p<0.001",
 	col=brewer.pal(9, "Set1"),
 	las=2,
 	ylab="SYNTAX correlated RNAs")

@@ -59,7 +59,7 @@ multiCatModelMatrix = function(catvec)  {
 	catvec_uni = unique(unlist(catvec_sep))
 	catvec_uni = catvec_uni[!is.na(catvec_uni)]
 
-	model_mat = matrix(0, ncol=length(catvec_uni), nrow=ncol(mat))
+	model_mat = matrix(0, ncol=length(catvec_uni), nrow=length(catvec))
 	colnames(model_mat) = catvec_uni
 	for (i in 1:length(catvec_sep)) {
 		model_mat[i, ] = catvec_uni %in% catvec_sep[[i]]
@@ -137,63 +137,61 @@ for (i in 1:length(expr_mats_norm)) {
 # Also filters transcripts based on standard deviation
 # ------------------------------------------------------
 # Variance filter and batch correction
-min_sd = 0.5
+# min_sd = 0.5
+min_sd = 1.0
+# i = 1
+# mat = expr_mats_norm[[i]]
 expr_mats_batch = lapply(expr_mats_norm, function(mat) {
 	# Filter genes based on standard deviation
 	mat = mat[apply(mat, 1, sd, na.rm=T) > min_sd, ]
 
-	# Match phenotype data to selected gene expression matrix
-	patient_ids = sapply(
-		strsplit(colnames(mat), "_"),
-		function(x) x[2]
-	)
-
-	pheno_matched = pheno[match(patient_ids, pheno$starnet.ID), ]
+	# Match technical covariates
 	covar_matched = covar[match(colnames(mat), covar$sample), ]
-
 
 	# Identify batches
 	batch = covar_matched$read_length
 	if (all(is.na(batch))) {
 		batch[is.na(batch)] = 100  # default read length if all are missing
 	}
-	batch[is.na(batch)] = median(batch, na.rm=T)  # 
+	batch[is.na(batch)] = median(batch, na.rm=T)  # impute missing batches
+	batch = factor(batch)
 
 	# Correct batch effects
 	# Model matrix taking into acount primariy covariates
 	options(na.action="na.pass")  # keep NA rows in model matrix
 
-	# modcombat = model.matrix(~syntax_score + BMI + LDL + Age, data=pheno_matched)
-	modcombat = model.matrix(~1 + flowcell, data=covar_matched)
+	# modcombat = model.matrix(~1 + flowcell, data=covar_matched)
 
-	flow_model = multiCatModelMatrix(covar_matched$flowcell)
+	# Default model
+	modcombat = model.matrix(~1, data=covar_matched)
 
-	# Remove flows with few samples
-	flow_model = flow_model[, apply(flow_model, 2, sum) > 5]
+	tryCatch({
+		flow_model = multiCatModelMatrix(covar_matched$flowcell)
 
-	# Remove linear dependencies from flow_model using singular value decomposition
-	epsilon = 10^-6  # small value definition
-	flow_svd = svd(flow_model)
+		# Remove flows with few samples
+		flow_model = flow_model[, apply(flow_model, 2, sum) > 5]
 
-	flow_model = flow_svd$u[ , flow_svd$d > epsilon]
-	flow_model = data.frame(flow_model)
+		# Remove linear combinations of the batch and flow model
+		dependent_col = fixDependence(
+			data.matrix(as.numeric(batch)),
+			data.matrix(flow_model))
 
-	# # Impute model input to median
-	# modcombat[is.na(modcombat[, 2]), 2] = median(modcombat[, 2], na.rm=T)  # syntax score
-	# modcombat[is.na(modcombat[, 3]), 3] = median(modcombat[, 3], na.rm=T)  # BMI
-	# modcombat[is.na(modcombat[, 4]), 4] = median(modcombat[, 4], na.rm=T)  # BMI
-	# modcombat[is.na(modcombat[, 5]), 5] = median(modcombat[, 5], na.rm=T)  # BMI
+		flow_model = flow_model[, !1:ncol(flow_model) %in% dependent_col]
 
-	# modcombat = model.matrix(~1, data=pheno_matched)
+		# Remove linear dependencies from flow_model using singular value decomposition
+		epsilon = 10^-6  # small value definition
+		flow_svd = svd(flow_model)
 
-	# Remove linear dependencies between batch and flow_model
-	flow_model = flow_model[, cor(as.numeric(batch), flow_model) < 1 - epsilon]
+		# flow_model = flow_svd$u[ , flow_svd$d > epsilon]
+		flow_model = flow_svd$u[ , flow_svd$d > 4.0]
+		flow_model = data.frame(flow_model)
 
-	# Construct covariate object from flow_model
-	modcombat = model.matrix(~1 + ., data=flow_model)
-
-	# all_model = cbind(batch, flow_model)
-	# mod = model.matrix(~1 + ., data=all_model)
+		# Construct covariate object from flow_model
+		modcombat = model.matrix(~1 + ., data=flow_model)  # sets modcombat
+	}, error=function(e) {
+		warning(e)
+		warning("1st sample: ", colnames(mat)[1])
+	})
 
 	# Batch corrected expression matrix
 	tryCatch({
@@ -201,16 +199,12 @@ expr_mats_batch = lapply(expr_mats_norm, function(mat) {
 			batch=batch,
 			mod=modcombat  # model with first column maintained and rest subtracted
 		)
-		# batch_mat = sva(mat,
-		# 	# batch=batch,
-		# 	mod=mod
-		# )
-
 		return(batch_mat)
-	}, error=function(e){
+	}, error=function(e) {
 		warning(e)
+		warning("1st sample: ", colnames(mat)[1])
 		# Use expression matrix as batch corrected data
-		return(mat)
+		return(NA)
 	})
 })
 
@@ -228,12 +222,45 @@ for (i in 1:length(expr_mats_batch)) {
 save(expr_mats_batch, file=file.path(data_dir, "STARNET/gene_exp_norm_batch/all.RData"))
 
 
+imputeMedianModel = function(model) {
+	for (i in 1:ncol(model)) {
+		model[is.na(model[, i])] = median(model[, i], na.rm=T)
+	}
+	# # Impute model input to median
+	# modcombat[is.na(modcombat[, 2]), 2] = median(modcombat[, 2], na.rm=T)  # syntax score
+	# modcombat[is.na(modcombat[, 3]), 3] = median(modcombat[, 3], na.rm=T)  # BMI
+	# modcombat[is.na(modcombat[, 4]), 4] = median(modcombat[, 4], na.rm=T)  # BMI
+	# modcombat[is.na(modcombat[, 5]), 5] = median(modcombat[, 5], na.rm=T)  # BMI
+	return(model)
+}
 
-# Correct for clinical covariates
-# --------------------------------------------------------------
-lapply(expr_mats_batch, function(mat) {
-	
-})
+# # Correct for clinical covariates
+# # --------------------------------------------------------------
+# i = 1
+# mat = expr_mats_batch[[i]]
+
+# expr_mats_batch_covar = lapply(expr_mats_batch, function(mat) {
+
+# 	# Match phenotype data to selected gene expression matrix
+# 	patient_ids = sapply(
+# 		strsplit(colnames(mat), "_"),
+# 		function(x) x[2]
+# 	)
+
+# 	pheno_matched = pheno[match(patient_ids, pheno$starnet.ID), ]
+
+# 	options(na.action="na.pass")  # keep NA rows in model matrix
+
+# 	model = model.matrix(~1 + BMI + LDL + Age + Sex, data=pheno_matched)
+# 	model = imputeMedianModel(model)
+
+# 	batch = rep(1, nrow(mat))
+
+# 	batch_mat = ComBat(mat,
+# 		batch=batch,
+# 		mod=model  # model with first column maintained and rest subtracted
+# 	)
+# })
 
 
 # Collapse normalized gene expression matrices. Does not use the batch correction.

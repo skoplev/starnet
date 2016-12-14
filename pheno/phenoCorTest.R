@@ -97,6 +97,8 @@ syntax_cor = lapply(1:length(expr_mats_batch), function(i) {
 	return(tab)
 })
 
+names(syntax_cor) = names(expr_mats_batch)
+
 # Order correlation tables based on p-values
 syntax_cor = lapply(syntax_cor, function(x) {
 	x[order(x$pval), ]
@@ -104,10 +106,83 @@ syntax_cor = lapply(syntax_cor, function(x) {
 
 save(syntax_cor, file=file.path(data_dir, "STARNET/pheno_cor/syntax_cor.RData"))
 
+
+# Correlations based on permutations
+# -------------------------------------------------------
+K = 1000  # number of permutions
+
+cor_coef = list()
+cor_coef_perm = list()
+for (i in 1:length(expr_mats_batch)) {
+	message("Permutations test for: ", names(expr_mats_batch)[i])
+
+	mat = expr_mats_batch[[i]]
+	mat = as.matrix(mat)
+
+	# Match phenotype data to selected gene expression matrix
+	patient_ids = sapply(
+		strsplit(colnames(mat), "_"),
+		function(x) x[2]
+	)
+
+	pheno_matched = pheno[match(patient_ids, pheno$starnet.ID), ]
+
+	cor_coef[[i]] = cor(t(mat), as.matrix(pheno_matched$syntax_score), use="pairwise.complete")
+
+	# Permute phenotypes
+	pheno_perm = lapply(1:K, function(k) {
+		pheno_matched[sample(1:nrow(pheno_matched)), ]
+	})
+
+	# Permute test
+	cor_coef_perm[[i]] = matrix(NA, nrow=nrow(mat), ncol=K)
+	for (k in 1:K) {
+		if (k %% 50 == 0) {
+			message("	Perm iter: ", k)
+		}
+
+		cor_coef_perm[[i]][, k] = cor(t(mat), as.matrix(pheno_perm[[k]]$syntax_score), use="pairwise.complete")
+	}
+}
+
+i = 1
+hist(cor_coef[[i]], breaks=200,
+	prob=TRUE,
+	border=NA,
+	col=brewer.pal(9, "Set1")[i])
+lines(density(cor_coef_perm[[i]]))
+
+wilcox.test(cor_coef[[i]], as.vector(cor_coef_perm[[i]]))
+
+
+
+# Calculate empirical p-values for each gene
+
+# Gene-specific counts
+indicator_mat = sweep(abs(cor_coef_perm), 1, abs(cor_coef), "<")
+empi_counts = apply(indicator_mat, 1, sum)
+empi_pval = empi_counts / K
+
+# cor_coef_perm_abs = abs(cor_coef_perm)
+# # COunts for all genes
+# empi_counts = sapply(cor_coef, function(stat) {
+# 	sum(abs(stat) > cor_coef_perm_abs)
+# })
+
+# empi_pval = empi_counts / (K * nrow(mat))
+
+
+
+# plot(density(cor_coef_perm))
+
+
+
+# load(file=file.path(data_dir, "STARNET/pheno_cor/syntax_cor.RData"))
+
 # Count significant correlations at
 sig_cor = sapply(syntax_cor, function(x) {
-	sum(x$qval < 0.2)
-	# sum(x$pval < 0.001)
+	# sum(x$qval < 0.2)
+	sum(x$pval < 0.001)
 })
 names(sig_cor) = names(expr_mats_batch)
 
@@ -155,7 +230,7 @@ for (i in 1:nrow(cors_to_plot)) {
 	abline(coef(fit))
 }
 
-i = 1
+i = 1  # tissue
 mat = expr_mats_batch[[i]]
 mat = as.matrix(mat)
 
@@ -174,20 +249,22 @@ pheno_matched = pheno[match(patient_ids, pheno$starnet.ID), ]
 
 
 
-# sig_transcripts = cor_list[[i]]$transcript_id[cor_list[[i]]$qval < 0.5]
-sig_transcripts = cor_list[[i]]$transcript_id[cor_list[[i]]$pval < 0.01]
+# sig_transcripts = syntax_cor[[i]]$transcript_id[syntax_cor[[i]]$qval < 0.5]
+sig_transcripts = syntax_cor[[i]]$transcript_id[syntax_cor[[i]]$qval < 0.2]
+# sig_transcripts = syntax_cor[[i]]$transcript_id[syntax_cor[[i]]$pval < 0.001]
 
+pdf("pheno/plots/cor_AOR_FDR02.pdf", height=8, width=12)
 # rownames(mat)[cor_qvals$lfdr < 0.2]
 
-# submat = mat[cor_qvals$lfdr < 0.2, ]
-# submat = mat[cor_pvals < 0.001, ]
 submat = mat[rownames(mat) %in% sig_transcripts, ]
+rownames(submat) = sapply(strsplit(rownames(submat), "_"), function(x) x[1])
 
 rlab = colorGradient(pheno_matched$syntax_score,
 	gradlim=c(0, 100),
 	# colors=brewer.pal(9, "YlGnBu"))
 	colors=brewer.pal(9, "Blues"))
 rlab = as.matrix(rlab)
+colnames(rlab) = "SYNTAX"
 
 heatmap.3(
 	submat,
@@ -195,11 +272,12 @@ heatmap.3(
 	col=colorRampPalette(rev(brewer.pal(9, "Spectral")))(100),
 	breaks=seq(-3, 3, length.out=101),  # cap of coloring 
 	ColSideColors=rlab,
-	ColSideColorsSize=3,
+	ColSideColorsSize=1,
 	margins=c(6, 12),
 	keysize=0.9,
-	cexRow=0.4,
-	KeyValueName=expression("-log"[10] * " p"),
+	# cexRow=0.4,
+	# KeyValueName=expression("-log"[10] * " p"),
+	KeyValueName=expression("z-score"),
 	xlab="Patients"
 )
-
+dev.off()

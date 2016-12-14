@@ -62,13 +62,14 @@ names(expr_mats_batch) = sapply(
 # 	mod=modcombat  # model to maintain
 # )
 
+expr_mats_batch = expr_mats_batch[names(expr_mats_batch) != "COR"]
 
 # Run tSNE for each expression matrix
-embed = mclapply(expr_mats_batch, function(mat) {
+embed = lapply(expr_mats_batch, function(mat) {
 	dmat = dist(t(mat))
-	res = tsne(dmat, max_iter=2000, perplexity=10)
+	res = tsne(dmat, max_iter=2000, perplexity=15)
 	return(res)
-}, mc.cores=3)
+})
 
 
 # Selected phenotype for tSNE plots
@@ -77,10 +78,13 @@ phenotype = "BMI"
 # phenotype = "ID"
 # phenotype = "LDL"
 
+# expr_mats_batch
+
 pdf(paste0("pheno/plots/tSNE_", phenotype, ".pdf"), width=16)
 par(mfrow=c(2, 5))
 for (i in 1:length(expr_mats_batch)) {
 	print(names(expr_mats_batch)[i])
+
 	# i = 2
 	mat = expr_mats_batch[[i]]
 	res = embed[[i]]
@@ -140,6 +144,26 @@ for (i in 1:length(expr_mats_batch)) {
 	# text(res[,1], res[,2], labels=pheno_matched$starnet.ID, cex=0.5)
 	# text(res[,1], res[,2], labels=pheno_matched$syntax_score, cex=0.5)
 	# text(res[,1], res[,2], labels=pheno_matched$DUKE, cex=0.5)
+}
+
+if (phenotype == "syntax_score") {
+	plotColorBar(
+		colorGradient(seq(0, 100, length.out=100),
+			colors=brewer.pal(9, "YlGnBu")),
+		min=0, max=100, title="SYNTAX")
+} else if (phenotype == "ID") {
+	plotColorBar(
+		colorGradient(
+			seq(
+				min(as.numeric(pheno$starnet.ID), na.rm=T),
+				max(as.numeric(pheno$starnet.ID), na.rm=T),
+				length.out=100),
+		colors=rev(brewer.pal(9, "Spectral"))),
+		min=0,
+		max=max(as.numeric(pheno$starnet.ID), na.rm=T),
+		# min=0,
+		# max=100,
+		title="STARNET ID")
 }
 dev.off()
 

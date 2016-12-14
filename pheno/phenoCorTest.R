@@ -144,15 +144,75 @@ for (i in 1:length(expr_mats_batch)) {
 		cor_coef_perm[[i]][, k] = cor(t(mat), as.matrix(pheno_perm[[k]]$syntax_score), use="pairwise.complete")
 	}
 }
+names(cor_coef) = names(expr_mats_batch)
+names(cor_coef_perm) = names(expr_mats_batch)
 
-i = 1
-hist(cor_coef[[i]], breaks=200,
-	prob=TRUE,
-	border=NA,
-	col=brewer.pal(9, "Set1")[i])
-lines(density(cor_coef_perm[[i]]))
 
-wilcox.test(cor_coef[[i]], as.vector(cor_coef_perm[[i]]))
+# Count number of samples with SYNTAX score
+nsamples = sapply(expr_mats_batch, function(mat) {
+	mat = as.matrix(mat)
+	# Match phenotype data to selected gene expression matrix
+	patient_ids = sapply(
+		strsplit(colnames(mat), "_"),
+		function(x) x[2]
+	)
+
+	pheno_matched = pheno[match(patient_ids, pheno$starnet.ID), ]
+
+	return(sum(!is.na(pheno_matched$syntax_score)))
+})
+
+# Wilcox test, comparing the correlation distribution with empirical null distribution
+# wilcox = list()
+# for (i in 1:length(cor_coef)) {
+# 	message(i, " of ", length(cor_coef))
+# 	wilcox[[i]] = wilcox.test(cor_coef[[i]], as.vector(cor_coef_perm[[i]]))
+# }
+
+# Seperate statistic for each random sample
+wilcox_ensemble = list()
+for (i in 1:length(cor_coef)) {
+	message(i, " of ", length(cor_coef))
+	wilcox_ensemble[[i]] = apply(cor_coef_perm[[i]], 2, function(rand_sample) {
+		wilcox.test(cor_coef[[i]], rand_sample)
+	})
+}
+
+mean(sapply(wilcox_ensemble[[i]], function(x) x$p.value))
+
+
+# Specify tissue order for plotting
+tissue_order = c("AOR", "MAM", "BLO", "SUF", "VAF", "LIV", "SKM", "MAC", "FOC")
+tissue_idx = match(tissue_order, names(expr_mats_batch))
+
+tissue_cols = c(
+	brewer.pal(9, "Set1")[1:9 != 6],
+	brewer.pal(8, "Dark2")
+)
+
+par(mfcol=c(3, 3), mar=c(3, 1, 1, 1))
+# for (i in 1:length(cor_coef)) {
+for (i in tissue_idx) {
+	mean_wilcox_p = mean(sapply(wilcox_ensemble[[i]], function(x) x$p.value))
+
+	hist(cor_coef[[i]], breaks=200,
+		main=paste0(
+			names(cor_coef)[i],
+			" n=", nsamples[i],
+			# " p=", format(wilcox[[i]]$p.value, digits=3, scientific=TRUE)
+			" p=", format(mean_wilcox_p, digits=3, scientific=TRUE)
+			),
+		cex.main=1.0,
+		prob=TRUE,
+		border=NA,
+		xpd=TRUE,
+		col=tissue_cols[i])
+	lines(density(cor_coef_perm[[i]]), 
+		# lwd=1.5,
+		# xpd=TRUE,
+		# col=rgb(0, 0, 0, 0.5)
+	)
+}
 
 
 

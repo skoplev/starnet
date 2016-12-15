@@ -9,6 +9,7 @@ library(data.table)
 library(org.Hs.eg.db)
 library(DESeq2)
 library(mgcv)
+library(sva)
 
 library(compiler)
 enableJIT(3)
@@ -138,8 +139,8 @@ for (i in 1:length(expr_mats_norm)) {
 # Also filters transcripts based on standard deviation
 # ------------------------------------------------------
 # Variance filter and batch correction
-# min_sd = 0.5
-min_sd = 1.0
+min_sd = 0.5
+# min_sd = 1.0
 # i = 1
 # mat = expr_mats_norm[[i]]
 expr_mats_batch = lapply(expr_mats_norm, function(mat) {
@@ -190,6 +191,10 @@ expr_mats_batch = lapply(expr_mats_norm, function(mat) {
 		# Age and sex covariates
 		covar_model = covar_matched[, c("sex", "age"), with=FALSE]
 
+		# Impute to median for missing covariates
+		covar_model$sex[is.na(covar_model$sex)] = median(covar_model$sex, na.rm=TRUE)
+		covar_model$age[is.na(covar_model$age)] = median(covar_model$age, na.rm=TRUE)
+
 		# Construct covariate object from flow_model
 		# modcombat = model.matrix(~1 + ., data=flow_model)  # sets modcombat
 		modcombat = model.matrix(~1 + ., data=cbind(covar_model, flow_model))  # sets modcombat
@@ -212,6 +217,7 @@ expr_mats_batch = lapply(expr_mats_norm, function(mat) {
 		return(NA)
 	})
 })
+lapply(expr_mats_batch, dim)
 
 # Write normalized matrices as .tsv files
 dir.create(file.path(data_dir, "STARNET/gene_exp_norm_batch"))
@@ -231,41 +237,8 @@ imputeMedianModel = function(model) {
 	for (i in 1:ncol(model)) {
 		model[is.na(model[, i])] = median(model[, i], na.rm=T)
 	}
-	# # Impute model input to median
-	# modcombat[is.na(modcombat[, 2]), 2] = median(modcombat[, 2], na.rm=T)  # syntax score
-	# modcombat[is.na(modcombat[, 3]), 3] = median(modcombat[, 3], na.rm=T)  # BMI
-	# modcombat[is.na(modcombat[, 4]), 4] = median(modcombat[, 4], na.rm=T)  # BMI
-	# modcombat[is.na(modcombat[, 5]), 5] = median(modcombat[, 5], na.rm=T)  # BMI
 	return(model)
 }
-
-# # Correct for clinical covariates
-# # --------------------------------------------------------------
-# i = 1
-# mat = expr_mats_batch[[i]]
-
-# expr_mats_batch_covar = lapply(expr_mats_batch, function(mat) {
-
-# 	# Match phenotype data to selected gene expression matrix
-# 	patient_ids = sapply(
-# 		strsplit(colnames(mat), "_"),
-# 		function(x) x[2]
-# 	)
-
-# 	pheno_matched = pheno[match(patient_ids, pheno$starnet.ID), ]
-
-# 	options(na.action="na.pass")  # keep NA rows in model matrix
-
-# 	model = model.matrix(~1 + BMI + LDL + Age + Sex, data=pheno_matched)
-# 	model = imputeMedianModel(model)
-
-# 	batch = rep(1, nrow(mat))
-
-# 	batch_mat = ComBat(mat,
-# 		batch=batch,
-# 		mod=model  # model with first column maintained and rest subtracted
-# 	)
-# })
 
 
 # Collapse normalized gene expression matrices. Does not use the batch correction.

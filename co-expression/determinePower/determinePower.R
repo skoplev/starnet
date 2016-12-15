@@ -8,6 +8,8 @@ library(reshape2)
 library(plyr)
 library(parallel)
 library(RColorBrewer)
+# library(DMwR)  # knn impute
+library(impute)
 
 library(compiler)
 enableJIT(3)
@@ -18,6 +20,10 @@ options(stringsAsFactors = FALSE)
 
 enableWGCNAThreads(nThreads=8)  # assuming 2 threads per core
 
+setwd("/Users/sk/Google Drive/projects/cross-tissue")
+source("src/base.R")
+
+
 setwd("/Users/sk/Google Drive/projects/cross-tissue/co-expression/determinePower")
 # setwd("/sc/orga/projects/STARNET/koples01/cross-tissue/co-expression/determinePower")
 
@@ -27,16 +33,61 @@ load("/Users/sk/DataProjects/cross-tissue/STARNET/gene_exp_norm_reshape/expr_rec
 
 # Get expression matrix from recasted data frame with all tissue 
 mat = expr_recast[, 3:ncol(expr_recast)]
+mat = data.matrix(mat)
 row_meta = expr_recast[, 1:2]
-# rownames(mat) = expr_recast$transcript_id
 colnames(mat) = colnames(expr_recast)[3:ncol(expr_recast)]
 
-# Missing data
+# Remove samples with more than 80% missing data
+missing_frac = apply(mat, 2, function(col) {
+		sum(is.na(col)) / length(col)
+})
+mat = mat[, missing_frac < 0.8]
+
+# Missing data message, remining samples
 message("missing data fraction: ", sum(is.na(mat))/(nrow(mat) * ncol(mat)))
+
+# Impute missing data using 
+mat = impute.knn(mat, 3)
 
 # Standardize expression data
 mat = scale(t(mat))
 mat[is.na(mat)] = 0.0  # impute to average
+
+
+# Combined tSNE plot for all tissues
+
+# STARNET phenotype data
+pheno = fread(file.path(
+	"/Volumes/SANDY/phenotype_data",
+	"STARNET_main_phenotype_table.cases.Feb_29_2016.tbl"
+))
+
+# Match phenotype data to selected gene expression matrix
+
+pheno_matched = pheno[match(colnames(mat), pheno$starnet.ID), ]
+
+
+library(tsne)
+library(amap)
+
+# Combined distance matrix
+# dmat = dist(t(mat))
+# Parallelized calculation of distance matrix
+dmat = Dist(mat, method="euclidean", nbproc=4)
+
+embed = tsne(dmat, max_iter=2000, perplexity=15)
+
+col = colorGradient(pheno_matched$syntax_score,
+	gradlim=c(0, 100),
+	# range(pheno$syntax_score, na.rm=T),
+	colors=brewer.pal(9, "YlGnBu"))
+
+plot(embed[,1], embed[,2],
+	col=col,
+	pch=16,
+	cex=1.5,
+	main=names(expr_mats_batch)[i],
+	xlab="", ylab=""
 
 
 # Picking a soft power threshold to get scale-free correlation networks from each tissue alone

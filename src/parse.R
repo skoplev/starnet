@@ -40,7 +40,7 @@ loadNormData = function(data_dir, min_sd, exclude_files) {
 		return(mat)
 	})
 
-	testExprRownames(expr_mats)
+	# testExprRownames(expr_mats)
 
 	# Prefilter genes
 	message("Filtering data")

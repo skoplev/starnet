@@ -2,14 +2,16 @@
 # rows with genes and tissues, columns with samples (STARNET ID).
 # Writes an RData object.
 
+rm(list=ls())
+
 setwd("/Users/sk/Google Drive/projects/cross-tissue")
-source("../src/parse.r")
+source("src/parse.r")
 
 # User input
-data_dir = "/Users/sk/DataProjects/cross-tissue/STARNET/gene_exp_norm"
+data_dir = "/Users/sk/DataProjects/cross-tissue/STARNET/gene_exp_norm_batch"
 # data_dir = "/sc/orga/projects/STARNET/koples01/expr-mat"
 
-min_sd = 0.5  # sd threshold per tissue for including transcripts.
+min_sd = 0.5  # sd threshold per tissue for including transcripts. Note that normalization excludes transcripts with sd<1.0
 
 # Load data in folder, preprocess
 expr_recast = loadNormData(data_dir,

@@ -148,6 +148,69 @@ names(cor_coef) = names(expr_mats_batch)
 names(cor_coef_perm) = names(expr_mats_batch)
 
 
+# Specify tissue order for plotting
+tissue_order = c("AOR", "MAM", "BLO", "SUF", "VAF", "LIV", "SKM", "MAC", "FOC")
+tissue_idx = match(tissue_order, names(expr_mats_batch))
+
+tissue_cols = c(
+	brewer.pal(9, "Set1")[1:9 != 6],
+	brewer.pal(8, "Dark2")
+)
+
+
+# Count significant correlations at
+sig_cor = sapply(syntax_cor, function(x) {
+	# sum(x$qval < 0.2)
+	sum(x$pval < 0.001)
+})
+names(sig_cor) = names(expr_mats_batch)
+
+# Write as tables
+
+# AOR
+aor_syntax_tab = syntax_cor[[which(names(syntax_cor) == "AOR")]]
+aor_syntax_tab$transcript_id = sapply(
+	strsplit(as.character(aor_syntax_tab$transcript_id), "_"),
+	function(x) x[1])
+
+write.table(head(aor_syntax_tab, 50),
+	file="pheno/tables/aor_syntax50.tsv",
+	row.names=FALSE, quote=FALSE, sep="\t")
+
+# SUF
+suf_syntax_tab = syntax_cor[[which(names(syntax_cor) == "SUF")]]
+suf_syntax_tab$transcript_id = sapply(
+	strsplit(as.character(suf_syntax_tab$transcript_id), "_"),
+	function(x) x[1])
+
+write.table(head(suf_syntax_tab, 50),
+	file="pheno/tables/suf_syntax50.tsv",
+	row.names=FALSE, quote=FALSE, sep="\t")
+
+
+# LIV
+liv_syntax_tab = syntax_cor[[which(names(syntax_cor) == "LIV")]]
+liv_syntax_tab$transcript_id = sapply(
+	strsplit(as.character(liv_syntax_tab$transcript_id), "_"),
+	function(x) x[1])
+
+write.table(head(liv_syntax_tab, 50),
+	file="pheno/tables/liv_syntax50.tsv",
+	row.names=FALSE, quote=FALSE, sep="\t")
+
+
+
+pdf("pheno/plots/SYNTAX_cor_barplot.pdf", width=3.5, height=4)
+barplot(sig_cor[tissue_idx],
+	# sig_cor[!names(sig_cor) %in% c("COR", "FOC", "MAC")],
+	main="p<0.001",
+	# col=brewer.pal(9, "Set1"),
+	col=tissue_cols,
+	las=2,
+	ylab="SYNTAX correlated RNAs")
+dev.off()
+
+
 # Count number of samples with SYNTAX score
 nsamples = sapply(expr_mats_batch, function(mat) {
 	mat = as.matrix(mat)
@@ -178,50 +241,56 @@ for (i in 1:length(cor_coef)) {
 	})
 }
 
-mean(sapply(wilcox_ensemble[[i]], function(x) x$p.value))
+# mean(sapply(wilcox_ensemble[[i]], function(x) x$p.value))
+
+# plot(-log10(sort(sapply(wilcox_ensemble[[1]], function(x) x$p.value))))
+# lines(-log10(sort(sapply(wilcox_ensemble[[2]], function(x) x$p.value))))
+
+# sort(sapply(wilcox_ensemble[[i]], function(x) x$p.value))
 
 
-# Specify tissue order for plotting
-tissue_order = c("AOR", "MAM", "BLO", "SUF", "VAF", "LIV", "SKM", "MAC", "FOC")
-tissue_idx = match(tissue_order, names(expr_mats_batch))
-
-tissue_cols = c(
-	brewer.pal(9, "Set1")[1:9 != 6],
-	brewer.pal(8, "Dark2")
-)
-
-par(mfcol=c(3, 3), mar=c(3, 1, 1, 1))
+pdf("pheno/plots/syntax_cor_distr.pdf", height=8, width=16)
+# svg("pheno/plots/syntax_cor_distr.svg", height=5)
+par(mfcol=c(3, 3), mar=c(8, 9, 4, 4))
 # for (i in 1:length(cor_coef)) {
-for (i in tissue_idx) {
-	mean_wilcox_p = mean(sapply(wilcox_ensemble[[i]], function(x) x$p.value))
+for (i in 1:length(tissue_idx)) {
+	idx = tissue_idx[i]
+	mean_wilcox_p = mean(sapply(wilcox_ensemble[[idx]], function(x) x$p.value))
 
-	hist(cor_coef[[i]], breaks=200,
+	# par(lwd=0.5)
+	histo = hist(cor_coef[[idx]], breaks=100,
 		main=paste0(
-			names(cor_coef)[i],
-			" n=", nsamples[i],
-			# " p=", format(wilcox[[i]]$p.value, digits=3, scientific=TRUE)
-			" p=", format(mean_wilcox_p, digits=3, scientific=TRUE)
+			names(cor_coef)[idx],
+			" n=", nsamples[idx],
+			# " p=", format(wilcox[[idx]]$p.value, digits=3, scientific=TRUE)
+			# " p=", format(mean_wilcox_p, digits=3, scientific=TRUE)
+			" p=", format(mean_wilcox_p, digits=3)
 			),
-		cex.main=1.0,
+		cex.main=2.5,
+		xlab="", ylab="",
 		prob=TRUE,
-		border=NA,
+		border=tissue_cols[i],
 		xpd=TRUE,
 		col=tissue_cols[i])
-	lines(density(cor_coef_perm[[i]]), 
-		# lwd=1.5,
+
+	# lines(c(histo$breaks, max(histo$breaks)), c(0, histo$density, 0), type="S")
+	# barplot(histo$density, histo$breaks, space=0, col=tissue_cols[i], border=NA)
+
+	lines(density(cor_coef_perm[[idx]]), 
+		lwd=2.5,
 		# xpd=TRUE,
 		# col=rgb(0, 0, 0, 0.5)
 	)
 }
-
+dev.off()
 
 
 # Calculate empirical p-values for each gene
 
-# Gene-specific counts
-indicator_mat = sweep(abs(cor_coef_perm), 1, abs(cor_coef), "<")
-empi_counts = apply(indicator_mat, 1, sum)
-empi_pval = empi_counts / K
+# # Gene-specific counts
+# indicator_mat = sweep(abs(cor_coef_perm), 1, abs(cor_coef), "<")
+# empi_counts = apply(indicator_mat, 1, sum)
+# empi_pval = empi_counts / K
 
 # cor_coef_perm_abs = abs(cor_coef_perm)
 # # COunts for all genes
@@ -232,28 +301,8 @@ empi_pval = empi_counts / K
 # empi_pval = empi_counts / (K * nrow(mat))
 
 
-
-# plot(density(cor_coef_perm))
-
-
-
 # load(file=file.path(data_dir, "STARNET/pheno_cor/syntax_cor.RData"))
 
-# Count significant correlations at
-sig_cor = sapply(syntax_cor, function(x) {
-	# sum(x$qval < 0.2)
-	sum(x$pval < 0.001)
-})
-names(sig_cor) = names(expr_mats_batch)
-
-
-pdf("pheno/plots/SYNTAX_cor_barplot.pdf", width=3.5, height=4)
-barplot(sig_cor[!names(sig_cor) %in% c("COR", "FOC", "MAC")],
-	main="p<0.001",
-	col=brewer.pal(9, "Set1"),
-	las=2,
-	ylab="SYNTAX correlated RNAs")
-dev.off()
 
 
 cors_to_plot = data.frame(

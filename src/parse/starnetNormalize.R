@@ -8,6 +8,7 @@ rm(list=ls())
 library(data.table)
 library(org.Hs.eg.db)
 library(DESeq2)
+library(mgcv)
 
 library(compiler)
 enableJIT(3)
@@ -186,8 +187,12 @@ expr_mats_batch = lapply(expr_mats_norm, function(mat) {
 		flow_model = flow_svd$u[ , flow_svd$d > 4.0]
 		flow_model = data.frame(flow_model)
 
+		# Age and sex covariates
+		covar_model = covar_matched[, c("sex", "age"), with=FALSE]
+
 		# Construct covariate object from flow_model
-		modcombat = model.matrix(~1 + ., data=flow_model)  # sets modcombat
+		# modcombat = model.matrix(~1 + ., data=flow_model)  # sets modcombat
+		modcombat = model.matrix(~1 + ., data=cbind(covar_model, flow_model))  # sets modcombat
 	}, error=function(e) {
 		warning(e)
 		warning("1st sample: ", colnames(mat)[1])

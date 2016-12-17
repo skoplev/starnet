@@ -110,6 +110,10 @@ fullRankSubmat = function(mat) {
 
 data_dir = "/Users/sk/DataProjects/cross-tissue"
 
+setwd("/Users/sk/Google Drive/projects/cross-tissue")
+
+
+
 # Directory containing expression count matrices
 emat_dir = file.path(data_dir, "STARNET/gene_exp/matrices")
 
@@ -127,8 +131,6 @@ pheno_imp = mice(pheno)
 
 pheno = complete(pheno_imp)
 # pheno = imputeMedianModel(pheno)
-
-# sum(is.na(pheno))
 
 # First covariate table
 covar = fread(file.path(
@@ -211,16 +213,39 @@ expr_mats_norm = lapply(expr_mats_norm, function(mat) {
 	return(mat)
 })
 
-# Linear regression normalization
+# Rename expr mats
+names(expr_mats_norm) = sapply(
+	strsplit(names(expr_mats_norm), "[.]"),
+	function(x) x[4]
+)
 
-# min_sd = 1.0
-# i = 1
+# Linear regression normalization.
+# Uses SVD FLow Cell correction, covariates, surrogate variables (sva), and
+# penalized regression to account for covariates.
+# Phenotype data is imputed using MICE.
+# ----------------------------------------------------------------
+
+# Parameters:
+# include flow cells with more than this number of samples
+flow_cells_ignore_nsamples = 5  
+
+# Remove flow cell eigenvector based on eigenvalue cutoff
+flow_cells_min_eigen = 4.0
+
+# Number of surrogate variables
+nsurrogate_vars = 4
+
+# Adjustment penality for regression model
+adjust_l2_penalty = 1.0
+
 # mat = expr_mats_norm[[i]]
-expr_mats_batch = lapply(expr_mats_norm, function(mat) {
+expr_mats_batch = lapply(seq_along(expr_mats_norm), function(i) {
+	mat = expr_mats_norm[[i]]
 	mat = as.matrix(mat)
+	tissue = names(expr_mats_norm)[i]
 
-	# Phenotype model
-	# -----------------------------------------
+	message("Normalizing ", tissue)
+
 	# Match phenotype data
 	patient_ids = sapply(
 		strsplit(colnames(mat), "_"),
@@ -230,26 +255,18 @@ expr_mats_batch = lapply(expr_mats_norm, function(mat) {
 	pheno_matched = pheno[match(patient_ids, pheno$starnet.ID), ]
 	pheno_matched = as.data.frame(pheno_matched)
 
-	pheno_model = pheno_matched[, !colnames(pheno_matched) %in% c("starnet.ID", "Sex", "Age")]
-
-	# pheno_model = pheno_model[, colnames(pheno_model) %in% c("BMI", "LDL", "syntax_score", "DUKE", "lesions", "ndv")]
-
 	# Match covariates
 	covar_matched = covar_merged[match(colnames(mat), covar_merged$id), ]
 
-	# covar_merged_matched = covar_merged
-	flow_model = multiCatModelMatrix(covar_matched$flowcell)
+	# Phenotype model
+	# -----------------------------------------
 
-	# Remove flows with few samples
-	flow_model = flow_model[, apply(flow_model, 2, sum) > 5]
+	# Exclude phenotypes
+	pheno_model = pheno_matched[, !colnames(pheno_matched) %in% c("starnet.ID", "Sex", "Age")]
+	# pheno_model = pheno_model[, colnames(pheno_model) %in% c("BMI", "LDL", "syntax_score", "DUKE", "lesions", "ndv")]
 
-
-	# Remove linear dependencies from flow_model using singular value decomposition
-	flow_svd = svd(flow_model)
-
-	# flow_model = flow_svd$u[ , flow_svd$d > epsilon]
-	flow_model = flow_svd$u[ , flow_svd$d > 4.0]
-	flow_model = data.frame(flow_model)
+	# Covariance model
+	# ------------------------------------------
 
 	covar_model = covar_matched[, c("sex", "age", "read_length", "lab", "protocol"), with=FALSE]
 
@@ -269,6 +286,24 @@ expr_mats_batch = lapply(expr_mats_norm, function(mat) {
 	}
 	covar_model = covar_model[, n_factors > 1]
 
+	# Flow Cell model
+	# --------------------------------------------------------------
+	# covar_merged_matched = covar_merged
+	flow_model = multiCatModelMatrix(covar_matched$flowcell)
+
+	# Remove flows with few samples
+	flow_model = flow_model[, apply(flow_model, 2, sum) > flow_cells_ignore_nsamples]
+
+	# Remove linear dependencies from flow_model using singular value decomposition
+	flow_svd = svd(flow_model)
+
+	flow_model = flow_svd$u[ , flow_svd$d > flow_cells_min_eigen ]
+	flow_model = data.frame(flow_model)
+
+
+	# Combine models and estimate surrogate covariates
+	# taking into account the known covariates and the phenotype--to maintain.
+	# ------------------------------------------------------------
 	null_model = model.matrix(~., data=cbind(covar_model, flow_model))
 
 	# Remove linearly dependent columns of model matrix
@@ -281,70 +316,79 @@ expr_mats_batch = lapply(expr_mats_norm, function(mat) {
 
 	all_model = fullRankSubmat(all_model)  # intercept removal
 
-
-	latent_model = sva(mat[1:2000, ],
+	# Run sva to identify surrogate variables
+	message("Identifying surrogate variables")
+	latent_model = sva(
+		mat[1:2000, ],
+		# mat,
 		mod=all_model,
 		mod0=null_model,
-		n.sv=4
+		n.sv=nsurrogate_vars
 	)
 
-	# cor(latent_model$sv, pheno_matched$starnet.ID)
-
-	pdf()
+	# Plot surrogate variable againts STARNET ID 
+	pdf(paste0("norm/plots/sur_var_", tissue, ".pdf"))
 	par(mfrow=c(2, 2))
 	for (i in 1:4) {
-		plot(pheno_matched$starnet.ID, latent_model$sv[,i])
+		plot(pheno_matched$starnet.ID, latent_model$sv[,i],
+			xlab="STARNET ID", ylab="Surrogate var.")
 	}
-
-	# latent_model = sva(mat[1:500, ], null_model)
-
-	# latent_model = sva(mat,
-	# 	mod=all_model,  # full model matrix
-	# 	mod0=null_model,  # 
-	# 	n.sv=2
-	# )
+	dev.off()
 
 
-	adjust_model = model.matrix(~., data=cbind(covar_model, flow_model, latent_model$sv))
+	# Adjust regression matrix using penlized regression with known and identified covariates.
+	# ----------------------------------------------------------
+
+	# Construct adjustement model matrix
+	adjust_model = model.matrix(
+		~ 0 + .,  # no intercept
+		data=cbind(covar_model, flow_model, latent_model$sv))
+
 	adjust_model = fullRankSubmat(adjust_model)
 
-	# fit = lm(mat ~ cbind(covar_model, flow_model, latent_model$sv))
-
-	# fit = lm(t(mat[1:2000, ]) ~ adjust_model)
-
+	# L2 penlized regression model.
+	# log caputes excessive newline output
+	message("Fitting penalized regresssion models with ", ncol(adjust_model), " parameters.")
 	log = capture.output({
-		fits = apply(mat[1:5000, ], 1, function(x) {
-			penalized(x, adjust_model, lambda2=1.0)
+		fits = apply(mat, 1, function(x) {
+			penalized(x, adjust_model, lambda2=adjust_l2_penalty)
 		})
 	})
 
-	# Get residuals
-	adj_mat = sapply(fits, function(x) x@residuals)
+	# Get residuals for regression fits
+	residual_mat = sapply(fits, function(x) x@residuals)
+
+	# Get linear regression coefficients
+	coefs = sapply(fits, coefficients)
 
 	# Standardize
-	adj_mat = scale(adj_mat)
+	# residual_mat = scale(residual_mat)
 
-	# adj_mat = scale(t(mat[1:2000,]))
+	return(residual_mat)
 
-	# heatmap(fit$coef)
-	# fit = rlm(t(mat[1:2000, ]) ~ adjust_model)
-
-	# adj_mat = fit$residuals
-	# adj_mat = scale(adj_mat)
-
-	# x = fit$coefficients
-	# x[is.na(x)] = 0
-	# heatmap.2(x,
-	# 	col=colorRampPalette(rev(brewer.pal(9, "RdBu")))(100),
-	# 	breaks=seq(-4, 4, length.out=100 + 1),
-	# 	trace="none")
-
-	# library(gplots)
-	# heatmap.2(adj_mat,
-	# 	col=colorRampPalette(rev(brewer.pal(9, "RdBu")))(100),
-	# 	breaks=seq(-4, 4, length.out=100 + 1),
-	# 	trace="none")
 })
+
+# adj_mat = scale(t(mat[1:2000,]))
+
+# heatmap(fit$coef)
+# fit = rlm(t(mat[1:2000, ]) ~ adjust_model)
+
+# adj_mat = fit$residuals
+# adj_mat = scale(adj_mat)
+
+# x = coefs
+# x[is.na(x)] = 0
+# heatmap.2(x,
+# 	col=colorRampPalette(rev(brewer.pal(9, "RdBu")))(100),
+# 	breaks=seq(-4, 4, length.out=100 + 1),
+# 	trace="none")
+
+# library(gplots)
+# heatmap.2(adj_mat,
+# 	col=colorRampPalette(rev(brewer.pal(9, "RdBu")))(100),
+# 	breaks=seq(-4, 4, length.out=100 + 1),
+# 	trace="none")
+
 
 # Batch correction using
 # Batch correction, using read lengths 50 and 100 bp, along with flowcell.

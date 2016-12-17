@@ -4,6 +4,8 @@
 
 rm(list=ls())
 
+library(reshape2)
+
 setwd("/Users/sk/Google Drive/projects/cross-tissue")
 source("src/parse.r")
 
@@ -11,7 +13,7 @@ source("src/parse.r")
 data_dir = "/Users/sk/DataProjects/cross-tissue/STARNET/gene_exp_norm_batch"
 # data_dir = "/sc/orga/projects/STARNET/koples01/expr-mat"
 
-min_sd = 0.5  # sd threshold per tissue for including transcripts. Note that normalization excludes transcripts with sd<1.0
+min_sd = 0.5  # sd threshold per tissue for including transcripts.
 
 # Load data in folder, preprocess
 expr_recast = loadNormData(data_dir,

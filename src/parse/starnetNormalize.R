@@ -10,6 +10,8 @@ library(org.Hs.eg.db)
 library(DESeq2)
 library(mgcv)
 library(sva)
+library(plyr)
+library(MASS)
 
 library(compiler)
 enableJIT(3)
@@ -74,13 +76,89 @@ multiCatModelMatrix = function(catvec)  {
 	return(data.frame(model_mat))
 }
 
+imputeMedianModel = function(model) {
+	model = as.data.frame(model)
+	for (i in 1:ncol(model)) {
+		# count missing values
+		n_missing = sum(is.na(model[, i]))
+		if (n_missing > 0) {
+			warning(colnames(model)[i], " imputed for ", n_missing, " samples.")
+			# Impute to median
+			model[is.na(model[, i]), i] = median(model[, i], na.rm=TRUE)
+		}
+	}
+	return(model)
+}
+
+# Finds full rank set of matrix columns.
+# Recursive function
+fullRankSubmat = function(mat) {
+	if (qr(mat)$rank == ncol(mat)) {
+		# Base case: full rank
+		return(mat)
+	} else {
+		# Calc matrix ranks when removing each column
+		rank_holdout = sapply(1:ncol(mat),
+			function(i) qr(mat[, -i])$rank)
+
+		remove_col = which.max(rank_holdout)
+		message("Removing matrix column: ", colnames(mat)[remove_col])
+		return(fullRankSubmat(mat[, -remove_col]))
+	}
+}
+
 
 data_dir = "/Users/sk/DataProjects/cross-tissue"
 
 # Directory containing expression count matrices
 emat_dir = file.path(data_dir, "STARNET/gene_exp/matrices")
 
+# Load phenotype and covariate data for batch correction
+pheno = fread(file.path(
+	"/Volumes/SANDY/phenotype_data",
+	"STARNET_main_phenotype_table.cases.Feb_29_2016.tbl"
+))
+pheno$Smoking.Years[pheno$Smoking.Years == "" | is.na(pheno$Smoking.Years)] = 0  # assumes that missing infor => no smoking
+pheno$Smoking.Years[pheno$Smoking.Years == "25-30"] = "30"  # worst case assumption
+pheno$Smoking.Years = as.numeric(pheno$Smoking.Years)
 
+# Impute missing phenotype data. For sva analysis only.
+pheno_imp = mice(pheno)
+
+pheno = complete(pheno_imp)
+# pheno = imputeMedianModel(pheno)
+
+# sum(is.na(pheno))
+
+# First covariate table
+covar = fread(file.path(
+	"/Volumes/SANDY/phenotype_data",
+	"covariates.cases_and_controls.April_12_2016.txt"
+))
+covar = rename(covar, c("sample"="id"))
+
+# Second covariate table
+covar2 = fread(file.path(
+	"/Volumes/SANDY/phenotype_data",
+	"covariates.tbl"
+))
+
+# Merge covariate tables
+covar_merged = merge(covar, covar2,
+	by=c("id", "sex", "age"),
+	all=TRUE)
+# Fix discrepant read_lenghts. Default read_length to first covar table.
+covar_merged = rename(covar_merged, c("read_length.x"="read_length"))
+# Fill missing read_length fields from covar2
+covar_merged$read_length[is.na(covar_merged$read_length)] = covar_merged$read_length.y[is.na(covar_merged$read_length)]
+# Drop read_length.y
+covar_merged = covar_merged[, names(covar_merged) != "read_length.y", with=FALSE]
+# Drop incomplete fields
+covar_merged = covar_merged[, !names(covar_merged) %in% c("subject", "batch"), with=FALSE]
+
+
+
+# Load count matrices
 # gene symbol, exp
 expr_files = list.files(emat_dir)
 
@@ -92,17 +170,6 @@ expr_mats = lapply(expr_files, function(file_name) {
 })
 names(expr_mats) = expr_files
 
-# Load phenotype and covariate data for batch correction
-
-pheno = fread(file.path(
-	"/Volumes/SANDY/phenotype_data",
-	"STARNET_main_phenotype_table.cases.Feb_29_2016.tbl"
-))
-
-covar = fread(file.path(
-	"/Volumes/SANDY/phenotype_data",
-	"covariates.cases_and_controls.April_12_2016.txt"
-))
 
 
 # Normalize using size factors from DESeq2
@@ -132,23 +199,162 @@ for (i in 1:length(expr_mats_norm)) {
 	)
 }
 # save(expr_mats_norm, file=file.path(data_dir, "STARNET/gene_exp_norm/all.RData"))
-# load(file.path(data_dir, "STARNET/gene_exp_norm/all.RData"))
+load(file.path(data_dir, "STARNET/gene_exp_norm/all.RData"))
 
-# Batch correction, using read lengths 50 and 100 bp, along with flowcell.
-# Technical batch correction and adjustments.
-# Also filters transcripts based on standard deviation
-# ------------------------------------------------------
-# Variance filter and batch correction
-min_sd = 0.5
+min_sd = 0.5  # at the count level
+# Variance filter and pseudo-log2 transform
+expr_mats_norm = lapply(expr_mats_norm, function(mat) { 
+	# Filter genes based on standard deviation
+	mat = mat[apply(mat, 1, sd, na.rm=T) > min_sd, ]
+
+	mat = log2(mat + 1)
+	return(mat)
+})
+
+# Linear regression normalization
+
 # min_sd = 1.0
 # i = 1
 # mat = expr_mats_norm[[i]]
 expr_mats_batch = lapply(expr_mats_norm, function(mat) {
-	# Filter genes based on standard deviation
-	mat = mat[apply(mat, 1, sd, na.rm=T) > min_sd, ]
+	mat = as.matrix(mat)
+
+	# Phenotype model
+	# -----------------------------------------
+	# Match phenotype data
+	patient_ids = sapply(
+		strsplit(colnames(mat), "_"),
+		function(x) x[2]
+	)
+
+	pheno_matched = pheno[match(patient_ids, pheno$starnet.ID), ]
+	pheno_matched = as.data.frame(pheno_matched)
+
+	pheno_model = pheno_matched[, !colnames(pheno_matched) %in% c("starnet.ID", "Sex", "Age")]
+
+	# pheno_model = pheno_model[, colnames(pheno_model) %in% c("BMI", "LDL", "syntax_score", "DUKE", "lesions", "ndv")]
+
+	# Match covariates
+	covar_matched = covar_merged[match(colnames(mat), covar_merged$id), ]
+
+	# covar_merged_matched = covar_merged
+	flow_model = multiCatModelMatrix(covar_matched$flowcell)
+
+	# Remove flows with few samples
+	flow_model = flow_model[, apply(flow_model, 2, sum) > 5]
+
+
+	# Remove linear dependencies from flow_model using singular value decomposition
+	flow_svd = svd(flow_model)
+
+	# flow_model = flow_svd$u[ , flow_svd$d > epsilon]
+	flow_model = flow_svd$u[ , flow_svd$d > 4.0]
+	flow_model = data.frame(flow_model)
+
+	covar_model = covar_matched[, c("sex", "age", "read_length", "lab", "protocol"), with=FALSE]
+
+	# Impute missing values from all model components to median value
+	covar_model = imputeMedianModel(covar_model)
+
+	covar_model$sex = factor(covar_model$sex)
+	covar_model$age = as.numeric(covar_model$age)
+	covar_model$read_length = factor(covar_model$read_length)
+	covar_model$lab = factor(covar_model$lab)
+	covar_model$protocol = factor(covar_model$protocol)
+
+	# Remove singular covariates
+	n_factors = apply(covar_model, 2, function(x) length(unique(x)))
+	if (any(n_factors < 2)) {
+		warning("Excluding singular covariates: ", colnames(covar_model)[n_factors < 2])
+	}
+	covar_model = covar_model[, n_factors > 1]
+
+	null_model = model.matrix(~., data=cbind(covar_model, flow_model))
+
+	# Remove linearly dependent columns of model matrix
+	null_model = fullRankSubmat(null_model)
+
+
+	# Identify surrogate model
+	all_model = model.matrix(~., data=cbind(pheno_model, covar_model, flow_model))
+	all_model[is.na(all_model)] = 0  # zero remaining missing values
+
+	all_model = fullRankSubmat(all_model)  # intercept removal
+
+
+	latent_model = sva(mat[1:2000, ],
+		mod=all_model,
+		mod0=null_model,
+		n.sv=4
+	)
+
+	# cor(latent_model$sv, pheno_matched$starnet.ID)
+
+	pdf()
+	par(mfrow=c(2, 2))
+	for (i in 1:4) {
+		plot(pheno_matched$starnet.ID, latent_model$sv[,i])
+	}
+
+	# latent_model = sva(mat[1:500, ], null_model)
+
+	# latent_model = sva(mat,
+	# 	mod=all_model,  # full model matrix
+	# 	mod0=null_model,  # 
+	# 	n.sv=2
+	# )
+
+
+	adjust_model = model.matrix(~., data=cbind(covar_model, flow_model, latent_model$sv))
+	adjust_model = fullRankSubmat(adjust_model)
+
+	# fit = lm(mat ~ cbind(covar_model, flow_model, latent_model$sv))
+
+	# fit = lm(t(mat[1:2000, ]) ~ adjust_model)
+
+	log = capture.output({
+		fits = apply(mat[1:5000, ], 1, function(x) {
+			penalized(x, adjust_model, lambda2=1.0)
+		})
+	})
+
+	# Get residuals
+	adj_mat = sapply(fits, function(x) x@residuals)
+
+	# Standardize
+	adj_mat = scale(adj_mat)
+
+	# adj_mat = scale(t(mat[1:2000,]))
+
+	# heatmap(fit$coef)
+	# fit = rlm(t(mat[1:2000, ]) ~ adjust_model)
+
+	# adj_mat = fit$residuals
+	# adj_mat = scale(adj_mat)
+
+	# x = fit$coefficients
+	# x[is.na(x)] = 0
+	# heatmap.2(x,
+	# 	col=colorRampPalette(rev(brewer.pal(9, "RdBu")))(100),
+	# 	breaks=seq(-4, 4, length.out=100 + 1),
+	# 	trace="none")
+
+	# library(gplots)
+	# heatmap.2(adj_mat,
+	# 	col=colorRampPalette(rev(brewer.pal(9, "RdBu")))(100),
+	# 	breaks=seq(-4, 4, length.out=100 + 1),
+	# 	trace="none")
+})
+
+# Batch correction using
+# Batch correction, using read lengths 50 and 100 bp, along with flowcell.
+# Technical batch correction and adjustments.
+# Also filters transcripts based on standard deviation
+# ------------------------------------------------------
+expr_mats_combatch = lapply(expr_mats_norm, function(mat) {
 
 	# Match technical covariates
-	covar_matched = covar[match(colnames(mat), covar$sample), ]
+	covar_matched = covar[match(colnames(mat), covar$id), ]
 
 	# Identify batches
 	batch = covar_matched$read_length
@@ -157,6 +363,11 @@ expr_mats_batch = lapply(expr_mats_norm, function(mat) {
 	}
 	batch[is.na(batch)] = median(batch, na.rm=T)  # impute missing batches
 	batch = factor(batch)
+
+	# subj_range = range(as.numeric(covar$subject), na.rm=TRUE)
+	# # batch = cut(as.numeric(covar_matched$subject), 20)
+	# batch = cut(as.numeric(covar_matched$subject), seq(subj_range[1], subj_range[2], length.out=11))
+	# batch[is.na(batch)] = levels(batch)[10]
 
 	# Correct batch effects
 	# Model matrix taking into acount primariy covariates
@@ -181,7 +392,7 @@ expr_mats_batch = lapply(expr_mats_norm, function(mat) {
 		flow_model = flow_model[, !1:ncol(flow_model) %in% dependent_col]
 
 		# Remove linear dependencies from flow_model using singular value decomposition
-		epsilon = 10^-6  # small value definition
+		# epsilon = 10^-6  # small value definition
 		flow_svd = svd(flow_model)
 
 		# flow_model = flow_svd$u[ , flow_svd$d > epsilon]
@@ -189,11 +400,16 @@ expr_mats_batch = lapply(expr_mats_norm, function(mat) {
 		flow_model = data.frame(flow_model)
 
 		# Age and sex covariates
-		covar_model = covar_matched[, c("sex", "age"), with=FALSE]
+		# covar_model = covar_matched[, c("sex", "age"), with=FALSE]
+		covar_model = covar_matched[, c("sex", "age", "subject"), with=FALSE]
 
 		# Impute to median for missing covariates
 		covar_model$sex[is.na(covar_model$sex)] = median(covar_model$sex, na.rm=TRUE)
 		covar_model$age[is.na(covar_model$age)] = median(covar_model$age, na.rm=TRUE)
+		covar_model$subject[covar_model$subject == "117A"] = "117"
+		covar_model$subject[is.na(covar_model$subject)] = median(covar_model$subject, na.rm=TRUE)
+		covar_model$subject = as.numeric(covar_model$subject)
+		# covar_model$read_length[is.na(covar_model$read_length)] = "100"  # default
 
 		# Construct covariate object from flow_model
 		# modcombat = model.matrix(~1 + ., data=flow_model)  # sets modcombat
@@ -233,12 +449,6 @@ for (i in 1:length(expr_mats_batch)) {
 save(expr_mats_batch, file=file.path(data_dir, "STARNET/gene_exp_norm_batch/all.RData"))
 
 
-imputeMedianModel = function(model) {
-	for (i in 1:ncol(model)) {
-		model[is.na(model[, i])] = median(model[, i], na.rm=T)
-	}
-	return(model)
-}
 
 
 # Collapse normalized gene expression matrices. Does not use the batch correction.

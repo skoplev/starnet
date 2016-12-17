@@ -8,7 +8,6 @@ library(reshape2)
 library(plyr)
 library(parallel)
 library(RColorBrewer)
-# library(DMwR)  # knn impute
 library(impute)
 
 library(compiler)
@@ -30,6 +29,12 @@ setwd("/Users/sk/Google Drive/projects/cross-tissue/co-expression/determinePower
 # Loads expr_recast data frame with tissue-specific expression
 load("/Users/sk/DataProjects/cross-tissue/STARNET/gene_exp_norm_reshape/expr_recast.RData")
 
+# STARNET phenotype data
+pheno = fread(file.path(
+	"/Volumes/SANDY/phenotype_data",
+	"STARNET_main_phenotype_table.cases.Feb_29_2016.tbl"
+))
+
 
 # Get expression matrix from recasted data frame with all tissue 
 mat = expr_recast[, 3:ncol(expr_recast)]
@@ -37,35 +42,31 @@ mat = data.matrix(mat)
 row_meta = expr_recast[, 1:2]
 colnames(mat) = colnames(expr_recast)[3:ncol(expr_recast)]
 
-# Remove samples with more than 80% missing data
+# Remove samples with more than 50% missing data
 missing_frac = apply(mat, 2, function(col) {
 		sum(is.na(col)) / length(col)
 })
-mat = mat[, missing_frac < 0.8]
+mat = mat[, missing_frac < 0.5]
 
 # Missing data message, remining samples
 message("missing data fraction: ", sum(is.na(mat))/(nrow(mat) * ncol(mat)))
 
-# Impute missing data using 
-mat = impute.knn(mat, 3)
+# Impute missing data using k-nearest neighbors
+mat = impute.knn(mat, k=20, colmax=0.5)$data
 
 # Standardize expression data
-mat = scale(t(mat))
-mat[is.na(mat)] = 0.0  # impute to average
+mat_scaled = scale(t(mat))
 
+# mat[is.na(mat)] = 0.0  # impute to average
 
 # Combined tSNE plot for all tissues
-
-# STARNET phenotype data
-pheno = fread(file.path(
-	"/Volumes/SANDY/phenotype_data",
-	"STARNET_main_phenotype_table.cases.Feb_29_2016.tbl"
-))
 
 # Match phenotype data to selected gene expression matrix
 
 pheno_matched = pheno[match(colnames(mat), pheno$starnet.ID), ]
 
+# syntax_cor = cor(mat_scaled, pheno_matched$syntax_score, use="pairwise.complete")
+# starnet_cor = cor(mat_scaled, as.numeric(pheno_matched$starnet.ID), method="spearman", use="pairwise.complete")
 
 library(tsne)
 library(amap)
@@ -73,21 +74,53 @@ library(amap)
 # Combined distance matrix
 # dmat = dist(t(mat))
 # Parallelized calculation of distance matrix
-dmat = Dist(mat, method="euclidean", nbproc=4)
+# dmat = Dist(mat_scaled[, 1:1000], method="euclidean", nbproc=4)
+# dmat = Dist(mat_scaled, method="euclidean", nbproc=6)
+dmat = Dist(mat_scaled[, row_meta$tissue != "BLOOD"], method="euclidean", nbproc=6)
+
+# dmat = Dist(mat_scaled[, abs(syntax_cor) > 0.1], method="euclidean", nbproc=6)
+# dmat = Dist(mat_scaled[, abs(starnet_cor) < 0.05], method="euclidean", nbproc=6)
+
+# table(row_meta$tissue[abs(starnet_cor) < 0.05])
+# table(row_meta$tissue[abs(syntax_cor) > 0.1])
 
 embed = tsne(dmat, max_iter=2000, perplexity=15)
 
 col = colorGradient(pheno_matched$syntax_score,
 	gradlim=c(0, 100),
-	# range(pheno$syntax_score, na.rm=T),
+	colors=rev(brewer.pal(9, "Spectral")))
+
+col = colorGradient(pheno_matched$DUKE,
+	gradlim=c(0, 100),
+	colors=rev(brewer.pal(9, "Spectral")))
+
+col = colorGradient(pheno_matched$ndv,
+	gradlim=c(0, 3),
 	colors=brewer.pal(9, "YlGnBu"))
+
+col = colorGradient(pheno_matched$lesions,
+	gradlim=range(pheno$lesions, na.rm=TRUE),
+	colors=brewer.pal(9, "YlGnBu"))
+
+col = colorGradient(pheno_matched$starnet.ID,
+	gradlim=range(as.numeric(pheno_matched$starnet.ID), na.rm=T),
+	# as.numeric(pheno_matched$starnet.ID),
+	# as.numeric(covar_matched$subject),
+	colors=rev(brewer.pal(9, "Spectral")))
+
 
 plot(embed[,1], embed[,2],
 	col=col,
 	pch=16,
 	cex=1.5,
-	main=names(expr_mats_batch)[i],
 	xlab="", ylab=""
+)
+
+plotColorBar(
+	colorGradient(seq(0, 100, length.out=100),
+		colors=brewer.pal(9, "YlGnBu")),
+	min=0, max=100, title="SYNTAX")
+
 
 
 # Picking a soft power threshold to get scale-free correlation networks from each tissue alone

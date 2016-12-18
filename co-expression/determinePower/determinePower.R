@@ -52,10 +52,17 @@ mat = mat[, missing_frac < 0.5]
 message("missing data fraction: ", sum(is.na(mat))/(nrow(mat) * ncol(mat)))
 
 # Impute missing data using k-nearest neighbors
-mat = impute.knn(mat, k=20, colmax=0.5)$data
+mat = impute.knn(mat, k=20, colmax=0.5, maxp=10000)$data
 
 # Standardize expression data
-mat_scaled = scale(t(mat))
+# mat_scaled = scale(t(mat))
+mat_scaled = t(mat)  # not scale
+
+
+# row_sd = apply(mat, 1, sd)
+
+# sum(row_sd > 1)
+# mat_scaled = t(mat[row_sd > 1,])
 
 # mat[is.na(mat)] = 0.0  # impute to average
 
@@ -65,7 +72,8 @@ mat_scaled = scale(t(mat))
 
 pheno_matched = pheno[match(colnames(mat), pheno$starnet.ID), ]
 
-# syntax_cor = cor(mat_scaled, pheno_matched$syntax_score, use="pairwise.complete")
+syntax_cor = cor(mat_scaled, pheno_matched$syntax_score, use="pairwise.complete")
+duke_cor = cor(mat_scaled, pheno_matched$DUKE, use="pairwise.complete")
 # starnet_cor = cor(mat_scaled, as.numeric(pheno_matched$starnet.ID), method="spearman", use="pairwise.complete")
 
 library(tsne)
@@ -76,19 +84,32 @@ library(amap)
 # Parallelized calculation of distance matrix
 # dmat = Dist(mat_scaled[, 1:1000], method="euclidean", nbproc=4)
 # dmat = Dist(mat_scaled, method="euclidean", nbproc=6)
-dmat = Dist(mat_scaled[, row_meta$tissue != "BLOOD"], method="euclidean", nbproc=6)
+# dmat = Dist(mat_scaled[, row_meta$tissue != "BLOOD"], method="euclidean", nbproc=6)
+# dmat = Dist(mat_scaled, method="euclidean", nbproc=6)
 
 # dmat = Dist(mat_scaled[, abs(syntax_cor) > 0.1], method="euclidean", nbproc=6)
+dmat = Dist(mat_scaled[, abs(duke_cor) > 0.1], method="euclidean", nbproc=6)
+dmat = Dist(mat_scaled[, abs(duke_cor) > 0.05], method="euclidean", nbproc=6)
 # dmat = Dist(mat_scaled[, abs(starnet_cor) < 0.05], method="euclidean", nbproc=6)
 
 # table(row_meta$tissue[abs(starnet_cor) < 0.05])
 # table(row_meta$tissue[abs(syntax_cor) > 0.1])
 
-embed = tsne(dmat, max_iter=2000, perplexity=15)
+# embed = tsne(dmat, max_iter=2000, perplexity=15)
+
+# embed = tsne(dmat, max_iter=2000, perplexity=10)
+
+# embed = tsne(dmat, max_iter=2000, perplexity=5)
+
+embed = tsne(dmat, max_iter=2000, perplexity=20)
 
 col = colorGradient(pheno_matched$syntax_score,
 	gradlim=c(0, 100),
 	colors=rev(brewer.pal(9, "Spectral")))
+
+col = colorGradient(pheno_matched$syntax_score,
+	gradlim=c(0, 100),
+	colors=brewer.pal(9, "Blues"))
 
 col = colorGradient(pheno_matched$DUKE,
 	gradlim=c(0, 100),
@@ -115,6 +136,68 @@ plot(embed[,1], embed[,2],
 	cex=1.5,
 	xlab="", ylab=""
 )
+
+text(embed[,1], embed[,2], labels=pheno_matched$syntax_score, cex=0.3)
+
+
+par(mfrow=c(2, 2))
+
+col = colorGradient(pheno_matched$DUKE,
+	gradlim=c(0, 100),
+	colors=rev(brewer.pal(9, "Spectral")))
+plot(embed[,1], embed[,2],
+	col=col,
+	pch=16,
+	cex=1.5,
+	main="DUKE",
+	xlab="", ylab=""
+)
+text(embed[,1], embed[,2], labels=pheno_matched$DUKE, cex=0.3)
+
+col = colorGradient(pheno_matched$syntax_score,
+	gradlim=c(0, 100),
+	colors=rev(brewer.pal(9, "Spectral")))
+plot(embed[,1], embed[,2],
+	col=col,
+	pch=16,
+	cex=1.5,
+	main="SYNTAX",
+	xlab="", ylab=""
+)
+text(embed[,1], embed[,2], labels=pheno_matched$syntax_score, cex=0.3)
+
+
+
+col = colorGradient(pheno_matched$ndv,
+	# gradlim=range(pheno$ndv, na.rm=TRUE),
+	gradlim=c(0, 3),
+	colors=rev(brewer.pal(9, "Spectral")))
+plot(embed[,1], embed[,2],
+	col=col,
+	pch=16,
+	cex=1.5,
+	main="ndv",
+	xlab="", ylab=""
+)
+text(embed[,1], embed[,2], labels=pheno_matched$ndv, cex=0.3)
+
+col = colorGradient(pheno_matched$lesions,
+	gradlim=c(0, 9),
+	colors=rev(brewer.pal(9, "Spectral")))
+plot(embed[,1], embed[,2],
+	col=col,
+	pch=16,
+	cex=1.5,
+	main="lesions",
+	xlab="", ylab=""
+)
+text(embed[,1], embed[,2], labels=pheno_matched$lesions, cex=0.3)
+
+
+
+
+
+
 
 plotColorBar(
 	colorGradient(seq(0, 100, length.out=100),

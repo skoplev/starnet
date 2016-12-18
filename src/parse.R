@@ -13,9 +13,10 @@ testExprRownames = function(mats) {
 # Loads normalized gene expression matrices from folder.
 # Filters genes that varies less than provided standard deviation.
 # Returns single data frame with data
-loadNormData = function(data_dir, min_sd, exclude_files) {
+loadNormData = function(data_dir, min_sd=0, exclude_files) {
 	require(data.table)
 	require(reshape2)
+	require(plyr)
 
 	# Load expression data
 	expr_files = list.files(
@@ -37,24 +38,29 @@ loadNormData = function(data_dir, min_sd, exclude_files) {
 		mat = as.matrix(mat)
 		rownames(mat) = data_table[[1]]  # first column
 
+		if (ncol(mat) > nrow(mat)) {
+			warning("Gene expression matrix has more columns, than rows.")
+		}
+
 		return(mat)
 	})
 
 	# testExprRownames(expr_mats)
 
 	# Prefilter genes
-	message("Filtering data")
-	expr_mats_filter = sapply(expr_mats, function(mat) {
-		# Gene-wise standard deviation
-		std_devs = apply(mat, 1, sd)
+	if (min_sd > 0) {
+		message("Filtering data")
+		expr_mats = sapply(expr_mats, function(mat) {
+			# Gene-wise standard deviation
+			std_devs = apply(mat, 1, sd)
 
-		return(mat[std_devs > min_sd, ])
-	})
-
+			return(mat[std_devs > min_sd, ])
+		})
+	}
 
 	# Reshape filtered expression matrices
 	message("Melting data")
-	expr_melted = lapply(expr_mats_filter, function(mat) {
+	expr_melted = lapply(expr_mats, function(mat) {
 		melted = melt(t(mat))  # data frame of melted expression matrix, efficient melt
 
 		melted = rename(melted, c(
@@ -82,7 +88,7 @@ loadNormData = function(data_dir, min_sd, exclude_files) {
 
 		return(melted)
 	})
-	names(expr_melted) = names(expr_mats_filter)
+	names(expr_melted) = names(expr_mats)
 
 	# Combine melted data into single data frame
 	expr_melted_all = rbindlist(expr_melted)
@@ -92,7 +98,7 @@ loadNormData = function(data_dir, min_sd, exclude_files) {
 	expr_recast = dcast(expr_melted_all, tissue + transcript_id ~ patient_id)
 
 	# clean other elements from memory
-	rm(expr_melted_all, expr_melted, expr_mats_filter, expr_mats, scaled_mat)
+	rm(expr_melted_all, expr_melted, expr_mats, scaled_mat)
 	gc()  # garbage collection
 
 	return(expr_recast)

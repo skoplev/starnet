@@ -12,6 +12,8 @@ library(mgcv)
 library(sva)
 library(plyr)
 library(MASS)
+library(parallel)
+library(penalized)
 
 library(compiler)
 enableJIT(3)
@@ -76,16 +78,29 @@ multiCatModelMatrix = function(catvec)  {
 	return(data.frame(model_mat))
 }
 
+# Replaces missing entries in each column with median or most frequenct value.
+# 
 imputeMedianModel = function(model) {
 	model = as.data.frame(model)
 	for (i in 1:ncol(model)) {
+		# print(i)
 		# count missing values
 		n_missing = sum(is.na(model[, i]))
-		if (n_missing > 0) {
-			warning(colnames(model)[i], " imputed for ", n_missing, " samples.")
-			# Impute to median
-			model[is.na(model[, i]), i] = median(model[, i], na.rm=TRUE)
+		if (n_missing > 0 & n_missing != nrow(model)) {
+			# message(colnames(model)[i], " imputed for ", n_missing, " samples.")
+			if (is.numeric(model[, i])) {
+				# Impute to median
+				model[is.na(model[, i]), i] = median(model[, i], na.rm=TRUE)
+			} else {
+				# Calculate frequencies
+				freq = sort(table(model[, i]), decreasing=TRUE)
+				# Impute to most frequent value
+				model[is.na(model[, i]), i] = names(freq)[1]
+			}
 		}
+	}
+	if (sum(is.na(model)) > 0) {
+		warning("imputeMedianModel() failed")
 	}
 	return(model)
 }
@@ -177,6 +192,7 @@ names(expr_mats) = expr_files
 # Normalize using size factors from DESeq2
 # ---------------------------------------------------------------
 # converts $id to rownames of returned matrices
+message("Correcting for size factors.")
 expr_mats_norm = sapply(expr_mats, function(emat) {
 	# get numerical matrix
 	mat = emat[,2:ncol(emat), with=FALSE]
@@ -190,21 +206,22 @@ expr_mats_norm = sapply(expr_mats, function(emat) {
 	return(norm_mat)
 })
 
-# Write normalized matrices as .tsv files
-for (i in 1:length(expr_mats_norm)) {
-	message("writing", names(expr_mats_norm)[i])
+# # Write normalized matrices as .tsv files
+# for (i in 1:length(expr_mats_norm)) {
+# 	message("writing", names(expr_mats_norm)[i])
 
-	write.table(expr_mats_norm[[i]],
-		file.path(data_dir, "STARNET/gene_exp_norm", names(expr_mats_collapsed)[i]),
-		sep="\t",
-		quote=FALSE, col.names=NA
-	)
-}
+# 	write.table(expr_mats_norm[[i]],
+# 		file.path(data_dir, "STARNET/gene_exp_norm", names(expr_mats_collapsed)[i]),
+# 		sep="\t",
+# 		quote=FALSE, col.names=NA
+# 	)
+# }
 # save(expr_mats_norm, file=file.path(data_dir, "STARNET/gene_exp_norm/all.RData"))
-load(file.path(data_dir, "STARNET/gene_exp_norm/all.RData"))
+# load(file.path(data_dir, "STARNET/gene_exp_norm/all.RData"))
 
 min_sd = 0.5  # at the count level
 # Variance filter and pseudo-log2 transform
+message("Filtering transcripts based on standard deviation")
 expr_mats_norm = lapply(expr_mats_norm, function(mat) { 
 	# Filter genes based on standard deviation
 	mat = mat[apply(mat, 1, sd, na.rm=T) > min_sd, ]
@@ -218,6 +235,9 @@ names(expr_mats_norm) = sapply(
 	strsplit(names(expr_mats_norm), "[.]"),
 	function(x) x[4]
 )
+
+# Exclude matrices
+expr_mats_norm = expr_mats_norm[names(expr_mats_norm) != "COR"]
 
 # Linear regression normalization.
 # Uses SVD FLow Cell correction, covariates, surrogate variables (sva), and
@@ -234,11 +254,12 @@ flow_cells_min_eigen = 4.0
 
 # Number of surrogate variables
 nsurrogate_vars = 4
+# nsurrogate_vars = 8
 
 # Adjustment penality for regression model
 adjust_l2_penalty = 1.0
+# adjust_l2_penalty = 2.0
 
-# mat = expr_mats_norm[[i]]
 expr_mats_batch = lapply(seq_along(expr_mats_norm), function(i) {
 	mat = expr_mats_norm[[i]]
 	mat = as.matrix(mat)
@@ -265,6 +286,17 @@ expr_mats_batch = lapply(seq_along(expr_mats_norm), function(i) {
 	pheno_model = pheno_matched[, !colnames(pheno_matched) %in% c("starnet.ID", "Sex", "Age")]
 	# pheno_model = pheno_model[, colnames(pheno_model) %in% c("BMI", "LDL", "syntax_score", "DUKE", "lesions", "ndv")]
 
+	pheno_model = imputeMedianModel(pheno_model)
+
+	# Remove singular covariates
+	n_factors = apply(pheno_model, 2, function(x) length(levels(factor(x))))
+	if (any(n_factors < 2)) {
+		warning("Excluding singular covariates: ", colnames(pheno_model)[n_factors < 2])
+	}
+	pheno_model = pheno_model[, n_factors > 1]
+	# pheno_model[is.na(pheno_model)] = 0
+
+
 	# Covariance model
 	# ------------------------------------------
 
@@ -280,11 +312,13 @@ expr_mats_batch = lapply(seq_along(expr_mats_norm), function(i) {
 	covar_model$protocol = factor(covar_model$protocol)
 
 	# Remove singular covariates
-	n_factors = apply(covar_model, 2, function(x) length(unique(x)))
+	n_factors = apply(covar_model, 2, function(x) length(levels(factor(x))))
 	if (any(n_factors < 2)) {
 		warning("Excluding singular covariates: ", colnames(covar_model)[n_factors < 2])
 	}
 	covar_model = covar_model[, n_factors > 1]
+
+	# covar_model[is.na(covar_model)] = 0
 
 	# Flow Cell model
 	# --------------------------------------------------------------
@@ -300,11 +334,15 @@ expr_mats_batch = lapply(seq_along(expr_mats_norm), function(i) {
 	flow_model = flow_svd$u[ , flow_svd$d > flow_cells_min_eigen ]
 	flow_model = data.frame(flow_model)
 
-
 	# Combine models and estimate surrogate covariates
 	# taking into account the known covariates and the phenotype--to maintain.
 	# ------------------------------------------------------------
+	message("covar model size: ", ncol(covar_model))
+	message("flow model size: ", ncol(flow_model))
+	message("pheno model size: ", ncol(pheno_model))
+
 	null_model = model.matrix(~., data=cbind(covar_model, flow_model))
+	# null_model[is.na(null_model)] = 0
 
 	# Remove linearly dependent columns of model matrix
 	null_model = fullRankSubmat(null_model)
@@ -312,15 +350,13 @@ expr_mats_batch = lapply(seq_along(expr_mats_norm), function(i) {
 
 	# Identify surrogate model
 	all_model = model.matrix(~., data=cbind(pheno_model, covar_model, flow_model))
-	all_model[is.na(all_model)] = 0  # zero remaining missing values
+	# all_model[is.na(all_model)] = 0  # zero remaining missing values
 
 	all_model = fullRankSubmat(all_model)  # intercept removal
 
 	# Run sva to identify surrogate variables
 	message("Identifying surrogate variables")
-	latent_model = sva(
-		mat[1:2000, ],
-		# mat,
+	latent_model = sva(mat,
 		mod=all_model,
 		mod0=null_model,
 		n.sv=nsurrogate_vars
@@ -329,22 +365,26 @@ expr_mats_batch = lapply(seq_along(expr_mats_norm), function(i) {
 	# Plot surrogate variable againts STARNET ID 
 	pdf(paste0("norm/plots/sur_var_", tissue, ".pdf"))
 	par(mfrow=c(2, 2))
-	for (i in 1:4) {
+	# for (i in 1:min(25, ncol(latent_model$sv))) {
+	for (i in 1:nsurrogate_vars) {
 		plot(pheno_matched$starnet.ID, latent_model$sv[,i],
 			xlab="STARNET ID", ylab="Surrogate var.")
 	}
 	dev.off()
 
 
-	# Adjust regression matrix using penlized regression with known and identified covariates.
+	# Adjust regression matrix using penalized regression with known and identified covariates.
 	# ----------------------------------------------------------
 
 	# Construct adjustement model matrix
-	adjust_model = model.matrix(
-		~ 0 + .,  # no intercept
+	adjust_model = model.matrix(~ 0 + .,  # no intercept, intercept assumed by penalized()
 		data=cbind(covar_model, flow_model, latent_model$sv))
+	adjust_model[is.na(adjust_model)] = 0
+	fullRankSubmat(adjust_model)
 
-	adjust_model = fullRankSubmat(adjust_model)
+	# rescale age to [0, 1] to have more balanced priors
+	age_col = which(colnames(adjust_model) == "age")
+	adjust_model[, age_col] = adjust_model[, age_col] / 100
 
 	# L2 penlized regression model.
 	# log caputes excessive newline output
@@ -358,15 +398,45 @@ expr_mats_batch = lapply(seq_along(expr_mats_norm), function(i) {
 	# Get residuals for regression fits
 	residual_mat = sapply(fits, function(x) x@residuals)
 
+	# Get intercepts
+	intercepts = sapply(fits, function(x) coefficients(x)[1])
+
+	# plot(density(residual_mat))
+	# add intercepts to adjusted mat to maintaine absolute gene expression
+	adjust_mat = sweep(t(residual_mat), 1, intercepts, "+")
+
+	message("Adjusted data, correlation with original: ",
+		cor(as.vector(adjust_mat), as.vector(mat)))
+
+	return(adjust_mat)
+
+	# plot(mat[1:50, ], adjust_mat[1:50, ])
+	# return(t(residual_mat))
+
 	# Get linear regression coefficients
-	coefs = sapply(fits, coefficients)
-
-	# Standardize
-	# residual_mat = scale(residual_mat)
-
-	return(residual_mat)
-
+	# coefs = sapply(fits, coefficients)
 })
+names(expr_mats_batch) = names(expr_mats_norm)
+
+lapply(expr_mats_batch, dim)
+
+# Write normalized matrices as .tsv files
+dir.create(file.path(data_dir, "STARNET/gene_exp_norm_batch"))
+for (i in 1:length(expr_mats_batch)) {
+	message("writing ", names(expr_mats_batch)[i])
+
+	write.table(expr_mats_batch[[i]],
+		file.path(data_dir, "STARNET/gene_exp_norm_batch", 
+			paste0(names(expr_mats_batch)[i], ".mat")),
+		sep="\t",
+		quote=FALSE, col.names=NA
+	)
+}
+# save(expr_mats_batch, file=file.path(data_dir, "STARNET/gene_exp_norm_batch/all.RData"))
+save(expr_mats_batch, file=file.path(data_dir, "STARNET/gene_exp_norm_batch/all.RData"))
+
+# load(file.path(data_dir, "STARNET/gene_exp_norm_batch/all.RData"))
+# expr_mats_batch = lapply(expr_mats_batch, t)
 
 # adj_mat = scale(t(mat[1:2000,]))
 

@@ -32,11 +32,11 @@ covar = fread(file.path(
 load(file.path(data_dir, "STARNET/gene_exp_norm_batch/all.RData"))
 expr_mats_batch = expr_mats_batch[!is.na(expr_mats_batch)]  # remove missing entries
 
-# Rename loaded normalized gene expression matrices
-names(expr_mats_batch) = sapply(
-	strsplit(names(expr_mats_batch), "[.]"),
-	function(x) x[4]
-)
+# # Rename loaded normalized gene expression matrices
+# names(expr_mats_batch) = sapply(
+# 	strsplit(names(expr_mats_batch), "[.]"),
+# 	function(x) x[4]
+# )
 
 # Match phenotype data to selected gene expression matrix
 pheno_match = lapply(expr_mats_batch, function(mat) {
@@ -56,10 +56,6 @@ syntax_cor = lapply(1:length(expr_mats_batch), function(i) {
 	mat = as.matrix(mat)
 
 	# mat[mat < 0] = 0
-
-	# more stringent sd filter
-	# mat = mat[apply(mat, 1, sd, na.rm=T) > 2.0, ]
-	# mat = mat[apply(mat, 1, sd, na.rm=T) > 4.0, ]
 
 	# Match phenotype data to selected gene expression matrix
 	patient_ids = sapply(

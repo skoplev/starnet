@@ -8,7 +8,6 @@ library(reshape2)
 library(plyr)
 library(parallel)
 library(RColorBrewer)
-library(impute)
 
 library(compiler)
 enableJIT(3)
@@ -22,12 +21,11 @@ enableWGCNAThreads(nThreads=8)  # assuming 2 threads per core
 setwd("/Users/sk/Google Drive/projects/cross-tissue")
 source("src/base.R")
 
+data_dir = "/Users/sk/DataProjects/cross-tissue"
 
 setwd("/Users/sk/Google Drive/projects/cross-tissue/co-expression/determinePower")
 # setwd("/sc/orga/projects/STARNET/koples01/cross-tissue/co-expression/determinePower")
 
-# Loads expr_recast data frame with tissue-specific expression
-load("/Users/sk/DataProjects/cross-tissue/STARNET/gene_exp_norm_reshape/expr_recast.RData")
 
 # STARNET phenotype data
 pheno = fread(file.path(
@@ -35,28 +33,14 @@ pheno = fread(file.path(
 	"STARNET_main_phenotype_table.cases.Feb_29_2016.tbl"
 ))
 
+# Load imputed recast gene expression matrix
+load(file.path(data_dir, "STARNET/gene_exp_norm_batch_imp/all.RData"))
 
-# Get expression matrix from recasted data frame with all tissue 
-mat = expr_recast[, 3:ncol(expr_recast)]
-mat = data.matrix(mat)
-row_meta = expr_recast[, 1:2]
-colnames(mat) = colnames(expr_recast)[3:ncol(expr_recast)]
 
-# Remove samples with more than 50% missing data
-missing_frac = apply(mat, 2, function(col) {
-		sum(is.na(col)) / length(col)
-})
-mat = mat[, missing_frac < 0.5]
-
-# Missing data message, remining samples
-message("missing data fraction: ", sum(is.na(mat))/(nrow(mat) * ncol(mat)))
-
-# Impute missing data using k-nearest neighbors
-mat = impute.knn(mat, k=20, colmax=0.5, maxp=10000)$data
 
 # Standardize expression data
 # mat_scaled = scale(t(mat))
-mat_scaled = t(mat)  # not scale
+# mat_scaled = t(mat)  # no scale
 
 
 # row_sd = apply(mat, 1, sd)
@@ -72,59 +56,144 @@ mat_scaled = t(mat)  # not scale
 
 pheno_matched = pheno[match(colnames(mat), pheno$starnet.ID), ]
 
-syntax_cor = cor(mat_scaled, pheno_matched$syntax_score, use="pairwise.complete")
-duke_cor = cor(mat_scaled, pheno_matched$DUKE, use="pairwise.complete")
-# starnet_cor = cor(mat_scaled, as.numeric(pheno_matched$starnet.ID), method="spearman", use="pairwise.complete")
-
 library(tsne)
 library(amap)
 
+tsnePlot = function(embed, ...) {
+	plot(embed[,1], embed[,2],
+		xlab="", ylab="",
+		xaxt="n", yaxt="n",
+		...
+	)
+}
+
+
+# emat is genes x samples
+tsneSyntaxCmp = function(emat, pheno_matched, row_meta) {
+
+	# Calculate correlations with SYNTAX score
+	syntax_cor = cor(t(emat), pheno_matched$syntax_score, use="pairwise.complete")
+
+	# Select highly correlated transcripts
+	sel_transcripts = which(abs(syntax_cor) > 0.1)
+
+	message("Selecting: ", length(sel_transcripts), " transcripts.")
+	print(table(row_meta$tissue[sel_transcripts]))
+
+	# Parallelized calculation of distance matrix
+	dmat = Dist(t(emat), method="euclidean", nbproc=6)
+
+	# Run tSNE
+	embed = tsne(dmat, max_iter=2000, perplexity=20)
+
+	# Plot results
+	par(mfrow=c(2, 2), mar=c(2, 2, 2, 3))
+	col = colorGradient(pheno_matched$syntax_score,
+		gradlim=c(0, 100),
+		colors=rev(brewer.pal(9, "Spectral")))
+	tsnePlot(embed,
+		col=col,
+		pch=16,
+		main="SYNTAX"
+	)
+	legendCol(colorRampPalette(rev(brewer.pal(9, "Spectral")))(20), c(0, 100))
+	# text(embed[,1], embed[,2], labels=pheno_matched$syntax_score, cex=0.3)
+
+	col = colorGradient(pheno_matched$DUKE,
+		gradlim=c(0, 100),
+		colors=rev(brewer.pal(9, "Spectral")))
+	tsnePlot(embed,
+		col=col,
+		pch=16,
+		main="DUKE"
+	)
+	# legendCol(rev(brewer.pal(9, "Spectral")), c(0, 100))
+	legendCol(colorRampPalette(rev(brewer.pal(9, "Spectral")))(20), c(0, 100))
+	# text(embed[,1], embed[,2], labels=pheno_matched$DUKE, cex=0.3)
+
+	col = colorGradient(pheno_matched$ndv,
+		# gradlim=range(pheno$ndv, na.rm=TRUE),
+		gradlim=c(0, 3),
+		colors=rev(brewer.pal(9, "Spectral")))
+	tsnePlot(embed,
+		col=col,
+		pch=16,
+		main="ndv"
+	)
+	legendCol(colorRampPalette(rev(brewer.pal(9, "Spectral")))(20), c(0, 3))
+	# text(embed[,1], embed[,2], labels=pheno_matched$ndv, cex=0.3)
+
+	col = colorGradient(pheno_matched$lesions,
+		gradlim=c(0, 9),
+		colors=rev(brewer.pal(9, "Spectral")))
+	tsnePlot(embed,
+		col=col,
+		pch=16,
+		main="lesions"
+	)
+	legendCol(colorRampPalette(rev(brewer.pal(9, "Spectral")))(20), c(0, 9))
+
+	return(embed)
+}
+
 # Combined distance matrix
 # dmat = dist(t(mat))
-# Parallelized calculation of distance matrix
 # dmat = Dist(mat_scaled[, 1:1000], method="euclidean", nbproc=4)
 # dmat = Dist(mat_scaled, method="euclidean", nbproc=6)
 # dmat = Dist(mat_scaled[, row_meta$tissue != "BLOOD"], method="euclidean", nbproc=6)
 # dmat = Dist(mat_scaled, method="euclidean", nbproc=6)
 
-# dmat = Dist(mat_scaled[, abs(syntax_cor) > 0.1], method="euclidean", nbproc=6)
-dmat = Dist(mat_scaled[, abs(duke_cor) > 0.1], method="euclidean", nbproc=6)
-dmat = Dist(mat_scaled[, abs(duke_cor) > 0.05], method="euclidean", nbproc=6)
-# dmat = Dist(mat_scaled[, abs(starnet_cor) < 0.05], method="euclidean", nbproc=6)
+# Calculate correlations
+syntax_cor = cor(mat_scaled, pheno_matched$syntax_score, use="pairwise.complete")
+duke_cor = cor(mat_scaled, pheno_matched$DUKE, use="pairwise.complete")
+# starnet_cor = cor(mat_scaled, as.numeric(pheno_matched$starnet.ID), method="spearman", use="pairwise.complete")
+
+sel_transcripts = which(abs(syntax_cor) > 0.1)
+# sel_transcripts = which(abs(duke_cor) > 0.1)
+# sel_transcripts = which(abs(duke_cor) > 0.15)
+
+
+pdf("plots/syntax_cor_all_tSNE.pdf", width=7, height=6)
+embed = tsneSyntaxCmp(mat, pheno_matched, row_meta)
+dev.off()
+
+pdf("plots/syntax_cor_all_tSNE_null.pdf", width=7, height=6)
+embed = tsneSyntaxCmp(mat[, sample(ncol(mat))], pheno_matched, row_meta)
+dev.off()
+
 
 # table(row_meta$tissue[abs(starnet_cor) < 0.05])
 # table(row_meta$tissue[abs(syntax_cor) > 0.1])
 
-# embed = tsne(dmat, max_iter=2000, perplexity=15)
 
-# embed = tsne(dmat, max_iter=2000, perplexity=10)
+# col = colorGradient(pheno_matched$syntax_score,
+# 	gradlim=c(0, 100),
+# 	colors=rev(brewer.pal(9, "Spectral")))
 
-# embed = tsne(dmat, max_iter=2000, perplexity=5)
+# col = colorGradient(pheno_matched$syntax_score,
+# 	gradlim=c(0, 100),
+# 	colors=brewer.pal(9, "Blues"))
 
-embed = tsne(dmat, max_iter=2000, perplexity=20)
+# col = colorGradient(pheno_matched$DUKE,
+# 	gradlim=c(0, 100),
+# 	colors=rev(brewer.pal(9, "Spectral")))
 
-col = colorGradient(pheno_matched$syntax_score,
-	gradlim=c(0, 100),
-	colors=rev(brewer.pal(9, "Spectral")))
+# col = colorGradient(pheno_matched$ndv,
+# 	gradlim=c(0, 3),
+# 	colors=brewer.pal(9, "YlGnBu"))
 
-col = colorGradient(pheno_matched$syntax_score,
-	gradlim=c(0, 100),
-	colors=brewer.pal(9, "Blues"))
-
-col = colorGradient(pheno_matched$DUKE,
-	gradlim=c(0, 100),
-	colors=rev(brewer.pal(9, "Spectral")))
-
-col = colorGradient(pheno_matched$ndv,
-	gradlim=c(0, 3),
-	colors=brewer.pal(9, "YlGnBu"))
-
-col = colorGradient(pheno_matched$lesions,
-	gradlim=range(pheno$lesions, na.rm=TRUE),
-	colors=brewer.pal(9, "YlGnBu"))
+# col = colorGradient(pheno_matched$lesions,
+# 	gradlim=range(pheno$lesions, na.rm=TRUE),
+# 	colors=brewer.pal(9, "YlGnBu"))
 
 col = colorGradient(pheno_matched$starnet.ID,
 	gradlim=range(as.numeric(pheno_matched$starnet.ID), na.rm=T),
+	# as.numeric(pheno_matched$starnet.ID),
+	# as.numeric(covar_matched$subject),
+	colors=rev(brewer.pal(9, "Spectral")))
+
+col = colorGradient(factor(pheno_matched$Sex),
+	gradlim=range(as.numeric(factor(pheno_matched$Sex)), na.rm=T),
 	# as.numeric(pheno_matched$starnet.ID),
 	# as.numeric(covar_matched$subject),
 	colors=rev(brewer.pal(9, "Spectral")))
@@ -137,61 +206,8 @@ plot(embed[,1], embed[,2],
 	xlab="", ylab=""
 )
 
-text(embed[,1], embed[,2], labels=pheno_matched$syntax_score, cex=0.3)
+# text(embed[,1], embed[,2], labels=pheno_matched$syntax_score, cex=0.3)
 
-
-par(mfrow=c(2, 2))
-
-col = colorGradient(pheno_matched$DUKE,
-	gradlim=c(0, 100),
-	colors=rev(brewer.pal(9, "Spectral")))
-plot(embed[,1], embed[,2],
-	col=col,
-	pch=16,
-	cex=1.5,
-	main="DUKE",
-	xlab="", ylab=""
-)
-text(embed[,1], embed[,2], labels=pheno_matched$DUKE, cex=0.3)
-
-col = colorGradient(pheno_matched$syntax_score,
-	gradlim=c(0, 100),
-	colors=rev(brewer.pal(9, "Spectral")))
-plot(embed[,1], embed[,2],
-	col=col,
-	pch=16,
-	cex=1.5,
-	main="SYNTAX",
-	xlab="", ylab=""
-)
-text(embed[,1], embed[,2], labels=pheno_matched$syntax_score, cex=0.3)
-
-
-
-col = colorGradient(pheno_matched$ndv,
-	# gradlim=range(pheno$ndv, na.rm=TRUE),
-	gradlim=c(0, 3),
-	colors=rev(brewer.pal(9, "Spectral")))
-plot(embed[,1], embed[,2],
-	col=col,
-	pch=16,
-	cex=1.5,
-	main="ndv",
-	xlab="", ylab=""
-)
-text(embed[,1], embed[,2], labels=pheno_matched$ndv, cex=0.3)
-
-col = colorGradient(pheno_matched$lesions,
-	gradlim=c(0, 9),
-	colors=rev(brewer.pal(9, "Spectral")))
-plot(embed[,1], embed[,2],
-	col=col,
-	pch=16,
-	cex=1.5,
-	main="lesions",
-	xlab="", ylab=""
-)
-text(embed[,1], embed[,2], labels=pheno_matched$lesions, cex=0.3)
 
 
 

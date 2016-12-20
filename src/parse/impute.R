@@ -25,4 +25,4 @@ message("missing data fraction: ", sum(is.na(mat))/(nrow(mat) * ncol(mat)))
 # Impute missing data using k-nearest neighbors
 mat = impute.knn(mat, k=20, colmax=0.5, maxp=10000)$data
 
-save(mat, file=file.path(data_dir, "STARNET/gene_exp_norm_batch_imp/all.RData"))
+save(mat, row_meta, file=file.path(data_dir, "STARNET/gene_exp_norm_batch_imp/all.RData"))

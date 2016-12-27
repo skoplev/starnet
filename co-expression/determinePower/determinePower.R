@@ -1,5 +1,6 @@
 #!/usr/bin/env Rscript
-# Determines power of modules
+
+# Determines power of cross-tissue modules
 
 rm(list=ls())
 
@@ -34,7 +35,7 @@ pheno = fread(file.path(
 ))
 
 # Load imputed recast gene expression matrix
-load(file.path(data_dir, "STARNET/gene_exp_norm_batch_imp/all.RData"))
+load(file.path(data_dir, "STARNET/gene_exp_norm_batch_imp/all.RData"), verbose=TRUE)
 
 # Standardize expression data
 # mat_scaled = scale(t(mat))
@@ -43,26 +44,42 @@ load(file.path(data_dir, "STARNET/gene_exp_norm_batch_imp/all.RData"))
 pheno_matched = pheno[match(colnames(mat), pheno$starnet.ID), ]
 
 # Picking a soft power threshold to get scale-free correlation networks from each tissue alone
-powers = seq(1, 4, length.out=50)
+powers = seq(1, 5, length.out=50)
+block_size = 4000
 
 # Evaluate sequence of soft network cutoffs
 thresh_eval = list()
 for (tissue in unique(row_meta$tissue)) {
 	message("Estimating power for: ", tissue)
-	submat = mat[, row_meta$tissue == tissue]
+	submat = mat[row_meta$tissue == tissue, ]
 
-	thresh_eval[[tissue]] = pickSoftThreshold(submat,
+	thresh_eval[[tissue]] = pickSoftThreshold(t(submat),
 		powerVector=powers,
 		verbose=5,
-		blockSize=4000
+		blockSize=block_size
 	)
-
-	print(thresh_eval[[tissue]])
 }
+
+# Test optimal beta
+# Make all pairwise combinations of tissues
+thresh_eval_pairs = list()
+paired_tissue = combn(unique(row_meta$tissue), 2)
+for (i in 1:ncol(paired_tissue)) {
+	message("Estimating power for: ", paired_tissue[1, i], ", ", paired_tissue[2, i])
+	submat = mat[row_meta$tissue %in% paired_tissue[, i], ]
+
+	thresh_eval[[i]] = pickSoftThreshold(t(submat),
+		powerVector=powers,
+		verbose=5,
+		blockSize=block_size
+	)
+}
+names(thresh_eval_pairs) = apply(paired_tissue, 2, paste, collapse="_")
 
 
 dir.create("output")
 save(thresh_eval, file="output/thresh_eval.RData")
+save(thresh_eval_pairs, file="output/thresh_eval_pairs.RData")
 
 
 # Average best slope

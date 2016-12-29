@@ -564,39 +564,38 @@ save(expr_mats_batch, file=file.path(data_dir, "STARNET/gene_exp_norm_batch/all.
 
 
 
+# # Collapse normalized gene expression matrices. Does not use the batch correction.
+# # -----------------------------------------------------------
+# # Rename row names to gene symbols, aggregate by summing multiple matches to gene symbol.
+# # assumes that transcripts have associated gene symbols
+# expr_mats_collapsed = lapply(expr_mats_norm, function(mat) {
+# 	# Ensembl IDs
+# 	ensembl_versioned = sapply(
+# 		strsplit(rownames(mat), "_"),
+# 		function(vec) vec[length(vec)]  # last element
+# 	)
 
-# Collapse normalized gene expression matrices. Does not use the batch correction.
-# -----------------------------------------------------------
-# Rename row names to gene symbols, aggregate by summing multiple matches to gene symbol.
-# assumes that transcripts have associated gene symbols
-expr_mats_collapsed = lapply(expr_mats_norm, function(mat) {
-	# Ensembl IDs
-	ensembl_versioned = sapply(
-		strsplit(rownames(mat), "_"),
-		function(vec) vec[length(vec)]  # last element
-	)
+# 	# get base ENSEMBL IDs
+# 	ensembl_ids = sapply(strsplit(ensembl_versioned, "[.]"),
+# 		function(x) x[1]
+# 	)
 
-	# get base ENSEMBL IDs
-	ensembl_ids = sapply(strsplit(ensembl_versioned, "[.]"),
-		function(x) x[1]
-	)
+# 	# rename IDs
+# 	gene_symbols = mapIds(org.Hs.eg.db, keys=ensembl_ids, column="SYMBOL", keytype="ENSEMBL")
 
-	# rename IDs
-	gene_symbols = mapIds(org.Hs.eg.db, keys=ensembl_ids, column="SYMBOL", keytype="ENSEMBL")
+# 	mat_collapse = collapseMatSum(mat, gene_symbols)
 
-	mat_collapse = collapseMatSum(mat, gene_symbols)
-
-	return(mat_collapse)
-})
+# 	return(mat_collapse)
+# })
 
 
-# Write collapsed normalized matrices
-for (i in 1:length(expr_mats_collapsed)) {
-	message("Writing: ", names(expr_mats_collapsed)[i])
+# # Write collapsed normalized matrices
+# for (i in 1:length(expr_mats_collapsed)) {
+# 	message("Writing: ", names(expr_mats_collapsed)[i])
 
-	write.table(expr_mats_collapsed[[i]],
-		file.path(data_dir, "STARNET/gene_exp_norm_collapsed", names(expr_mats_collapsed)[i]),
-		sep="\t",
-		quote=FALSE, col.names=NA
-	)
-}
+# 	write.table(expr_mats_collapsed[[i]],
+# 		file.path(data_dir, "STARNET/gene_exp_norm_collapsed", names(expr_mats_collapsed)[i]),
+# 		sep="\t",
+# 		quote=FALSE, col.names=NA
+# 	)
+# }

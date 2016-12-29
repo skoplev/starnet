@@ -44,7 +44,8 @@ load(file.path(data_dir, "STARNET/gene_exp_norm_batch_imp/all.RData"), verbose=T
 pheno_matched = pheno[match(colnames(mat), pheno$starnet.ID), ]
 
 # Picking a soft power threshold to get scale-free correlation networks from each tissue alone
-powers = seq(1, 5, length.out=50)
+# powers = seq(1, 5, length.out=50)
+powers = seq(0.1, 10, length.out=50)
 block_size = 4000
 
 # Evaluate sequence of soft network cutoffs
@@ -60,27 +61,74 @@ for (tissue in unique(row_meta$tissue)) {
 	)
 }
 
-# Test optimal beta
-# Make all pairwise combinations of tissues
+# Test optimal beta for combinations of tissues. Uses cross-correlations only.
 thresh_eval_pairs = list()
 paired_tissue = combn(unique(row_meta$tissue), 2)
 for (i in 1:ncol(paired_tissue)) {
 	message("Estimating power for: ", paired_tissue[1, i], ", ", paired_tissue[2, i])
-	submat = mat[row_meta$tissue %in% paired_tissue[, i], ]
+	# submat = mat[row_meta$tissue %in% paired_tissue[, i], ]
 
-	thresh_eval[[i]] = pickSoftThreshold(t(submat),
+	# Cross-correlation only
+	cmat = cor(
+		t(mat[row_meta$tissue == paired_tissue[1, i]]),
+		t(mat[row_meta_tissue == paired_tissue[2, i]])
+		use="pairwise.complete"
+	)
+
+	thresh_eval_pairs[[i]] = pickSoftThreshold.fromSimilarity(
+		# t(submat),
+		cmat,
 		powerVector=powers,
-		verbose=5,
+		verbose=2,
 		blockSize=block_size
 	)
 }
 names(thresh_eval_pairs) = apply(paired_tissue, 2, paste, collapse="_")
-
+# thresh_eval_pairs = thresh_eval  # fix
 
 dir.create("output")
 save(thresh_eval, file="output/thresh_eval.RData")
 save(thresh_eval_pairs, file="output/thresh_eval_pairs.RData")
 
+
+i = 17
+
+plot(thresh_eval_pairs[[i]]$fitIndices$Power,
+	thresh_eval_pairs[[i]]$fitIndices$SFT.R.sq,
+	main=names(thresh_eval_pairs)[i],
+	type="l"
+)
+
+
+# i = 2
+par(mfrow=c(3, 3))
+
+for (i in 1:length(thresh_eval)) {
+
+	tissue = names(thresh_eval)[i]
+	plot(thresh_eval[[i]]$fitIndices$Power,
+		thresh_eval[[i]]$fitIndices$SFT.R.sq,
+		main=names(thresh_eval)[i],
+		type="l",
+		lwd=2.0,
+		ylim=c(0, 1)
+	)
+
+	# Find matching
+
+	pairs_idx = which(apply(paired_tissue, 2, function(col) tissue %in% col))
+	for (idx in pairs_idx) {
+		lines(thresh_eval_pairs[[idx]]$fitIndices$Power,
+			thresh_eval_pairs[[idx]]$fitIndices$SFT.R.sq,
+			main=names(thresh_eval_pairs)[idx],
+			type="l", col="grey"
+		)
+	}
+
+}
+
+
+sapply(thresh_eval_pairs, function(x) x$powerEstimate)
 
 # Average best slope
 deg_slopes = sapply(thresh_eval, function(x) x$fitIndices$slope)

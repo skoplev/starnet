@@ -8,9 +8,9 @@ mkdir logs
 bsub -J determinePower \
 	-P acc_STARNET \
 	-q alloc \
-	-W 48:00 \
-	-n 4 \
-	-R rusage[mem=4000] \
+	-W 96:00 \
+	-n 1 \
+	-R rusage[mem=64000] \
 	-e logs/error.%J \
 	-o logs/output.%J \
-	./determinePower.r
+	./determinePower.R ~/DataProjects/cross-tissue/STARNET/gene_exp_norm_batch_imp/all.RData

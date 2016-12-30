@@ -1,3 +1,9 @@
 #!/usr/bin/env Rscript
 
-print("test")
+args = commandArgs(trailingOnly=TRUE)
+
+# print("test")
+# print(length(args))
+# print(args)
+
+print(getwd())

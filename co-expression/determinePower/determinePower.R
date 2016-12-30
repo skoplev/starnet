@@ -1,14 +1,75 @@
 #!/usr/bin/env Rscript
 
-# Determines power of cross-tissue modules
+# Determines power of cross-tissue modules from reshaped gene expression matrix (tissue_gene x sample).
+# 
+# Input R object must contain reshaped gene expression matrix [mat] containing multiple
+# tissues in rows and aligned column-wise by individual. Must also contain associated row_meta table [row_meta].
+# 
+# Makes folders: output in working directory containing power estimate statistics.
+#
+# example of usage:
+# determinePower.R ~/DataProjects/cross-tissue/STARNET/gene_exp_norm_batch_imp/all.RData
 
-rm(list=ls())
+# Set options
+# -----------------------------------------------------------
 
+opts = list()
+# Picking a soft power threshold to get scale-free correlation networks from each tissue alone
+# opts$powers = seq(1, 10, length.out=20)
+opts$powers = seq(0.1, 10, length.out=51)
+# opts$powers = seq(1, 5, length.out=50)
+# opts$powers = seq(0.1, 10, length.out=50)
+# block_size = 4000
+
+opts$n_breaks = 50  # discrete bins of connectivity distribution
+
+opts$abs_cor_min = 0.2  # minimum correlation to be considered
+# cor_quant = 0.95
+
+
+# Parse and check user input
+# -------------------------------------------------------------
+args = commandArgs(trailingOnly=TRUE)  # R-style positional arguments
+if (length(args) != 1) {
+	stop("Invalid arguments. USAGE: determinePower.R <path to cross-tissue expression object>")
+}
+opts$emat_file = args[1]
+
+# For running in interactive mode
+if (!exists("args")) {
+	setwd("/Users/sk/Google Drive/projects/cross-tissue/co-expression/determinePower")
+	# setwd("/sc/orga/projects/STARNET/koples01/cross-tissue/co-expression/determinePower")
+
+	data_dir = "/Users/sk/DataProjects/cross-tissue"
+
+	# Load imputed recast gene expression matrix
+	opts$emat_file = file.path(data_dir, "STARNET/gene_exp_norm_batch_imp/all.RData")
+}
+
+
+# Load reshaped gene expression matrix
+load(opts$emat_file, verbose=TRUE)
+
+# Check input
+if (!exists("mat")) {
+	stop("R object does not contain mat variable.")
+}
+
+if (!exists("row_meta")) {
+	stop("Input R object does not contain meta_row variable")
+}
+
+if (any(is.na("mat"))) {
+	warning("Gene expression matrix contains missing data.")
+}
+
+# Set up R environment
+# -------------------------------------------------------------
 library(data.table)
-library(reshape2)
-library(plyr)
-library(parallel)
-library(RColorBrewer)
+# library(reshape2)
+# library(plyr)
+# library(parallel)
+# library(RColorBrewer)
 library(Matrix)
 
 library(compiler)
@@ -18,92 +79,11 @@ enableJIT(3)
 library(WGCNA)
 options(stringsAsFactors = FALSE)
 
-enableWGCNAThreads(nThreads=8)  # assuming 2 threads per core
+enableWGCNAThreads(nThreads=4)  # assuming 2 threads per core
 
 
-# # Filter out low connections
-# # k = cmat[cmat > 0.05]
-# # scaleFreeFitIndex(k, nBreaks=100)
-# # k = c(k1, k2)
-# fastScaleFreeFitIndex = function(k, nBreaks=50, epsilon=1e-09) {
-# 	# k = as.vector(k)
-# 	# Cut connections into discrete groups
-# 	# groups = cut(k, nBreaks)
-# 	# group_mean = tapply(k, groups, mean)  # mean connectivity in each group
-
-# 	# hist is faster than cut
-# 	groups = hist(k, breaks=nBreaks, plot=FALSE)
-
-# 	# groups = tabulate(.bincode(k, breaks=nBreaks))
-
-# 	groups$pk = groups$counts / length(k)
-# 	groups$log_pk = log(groups$pk + epsilon)
-# 	groups$log_mids = log(groups$mids)
-
-# 	# Count number of connections in each group
-# 	# group_pk = table(groups) / length(k)
-
-# 	# fit = fastLm(log(group_pk)~log(group_mean))
-# 	# fit = lm(log(groups$pk) ~ log(groups$mids))
-
-# 	fit = lm(groups$log_pk ~ groups$log_mids)
-
-# 	out = data.frame(Rsquared.SFT=summary(fit)$r.squared)
-# 	return(out)
-
-# 	plot(groups$log_mids, groups$log_pk)
-# }
-
-
-# setwd("/Users/sk/Google Drive/projects/cross-tissue")
-
-data_dir = "/Users/sk/DataProjects/cross-tissue"
-
-setwd("/Users/sk/Google Drive/projects/cross-tissue/co-expression/determinePower")
-# setwd("/sc/orga/projects/STARNET/koples01/cross-tissue/co-expression/determinePower")
-
-source("../../src/base.R")
-
-
-# # STARNET phenotype data
-# pheno = fread(file.path(
-# 	"/Volumes/SANDY/phenotype_data",
-# 	"STARNET_main_phenotype_table.cases.Feb_29_2016.tbl"
-# ))
-
-# Load imputed recast gene expression matrix
-load(file.path(data_dir, "STARNET/gene_exp_norm_batch_imp/all.RData"), verbose=TRUE)
-
-if (any(is.na(mat))) {
-	stop("Gene expression matrix contains missing data.")
-}
-
-# Standardize expression data
-# mat_scaled = scale(t(mat))
-
-# # Match phenotype data to selected gene expression matrix
-# pheno_matched = pheno[match(colnames(mat), pheno$starnet.ID), ]
-
-# Picking a soft power threshold to get scale-free correlation networks from each tissue alone
-# powers = seq(1, 10, length.out=20)
-
-powers = seq(0.1, 10, length.out=51)
-
-# powers = seq(1, 5, length.out=50)
-# powers = seq(0.1, 10, length.out=50)
-# block_size = 4000
-
-n_breaks = 50  # binning of connectivity
-
-# abs_cor_min = 0.05  # minimum correlation to be considered
-# abs_cor_min = 0.1  # minimum correlation to be considered
-# abs_cor_min = 0.15  # minimum correlation to be considered
-# abs_cor_min = 0.2  # minimum correlation to be considered
-# abs_cor_min = 0.3  # minimum correlation to be considered
-cor_quant = 0.95
-
-
-# Evaluate sequence of soft network cutoffs
+# Evaluate sequence of soft network cutoffs within tissues
+# ------------------------------------------------------------
 con_eval = list()
 for (i in 1:length(unique(row_meta$tissue))) {
 	tissue = unique(row_meta$tissue)[i]
@@ -112,7 +92,7 @@ for (i in 1:length(unique(row_meta$tissue))) {
 	# Symmetric correlation matrix within-tissue
 	message("estimating correlation coefficients")
 	cmat = corFast(t(mat[row_meta$tissue == tissue, ]),
-		nThreads=8  # parallel computation not working
+		nThreads=4  # parallel computation not working on OSX
 	)
 	gc()
 	message("dim: ", nrow(cmat), ", ", ncol(cmat))
@@ -122,12 +102,12 @@ for (i in 1:length(unique(row_meta$tissue))) {
 	cmat = abs(cmat)
 	gc()
 
-	abs_cor_min = quantile(cmat, cor_quant)
-	gc()
+	# opts$abs_cor_min = quantile(cmat, cor_quant)
+	# gc()
 
 	# Drop entries below threshold
-	message("converting to sparse matrix, abs_cor_min: ", abs_cor_min)
-	cmat[cmat < abs_cor_min] = 0  # delete entries
+	message("converting to sparse matrix, abs_cor_min: ", opts$abs_cor_min)
+	cmat[cmat < opts$abs_cor_min] = 0  # delete entries
 	gc()
 
 	# Convert to sparse, symmetric matrix, for increased efficiency
@@ -142,7 +122,7 @@ for (i in 1:length(unique(row_meta$tissue))) {
 
 	# Returns scale-free distribution fits and connectivity vectors for each tissue
 	# at the power series.
-	fits = lapply(powers, function(pow) {
+	fits = sapply(opts$powers, function(pow) {
 		message("power: ", pow)
 		# message("\tadjusting weights...")
 		cmat_power = cmat^pow
@@ -153,9 +133,10 @@ for (i in 1:length(unique(row_meta$tissue))) {
 		gc()
 
 		# message("\tfitting scale-free connectivity model")
-		fit = scaleFreeFitIndex(k, nBreaks=n_breaks, removeFirst=TRUE)
+		fit = scaleFreeFitIndex(k, nBreaks=opts$n_breaks, removeFirst=TRUE)
 		gc()
-		return(list(fit=fit, k=k))
+		return(fit)
+		# return(list(fit=fit, k=k))
 	})
 
 	con_eval[[i]] = fits
@@ -163,6 +144,8 @@ for (i in 1:length(unique(row_meta$tissue))) {
 
 
 # Test optimal beta for combinations of tissues. Uses cross-correlations only.
+# Between-tissues
+# ----------------------------------------------------------
 con_eval_pairs = list()
 paired_tissue = combn(unique(row_meta$tissue), 2)
 for (i in 1:ncol(paired_tissue)) {
@@ -173,7 +156,7 @@ for (i in 1:ncol(paired_tissue)) {
 	cmat = corFast(
 		t(mat[row_meta$tissue == paired_tissue[1, i], ]),
 		t(mat[row_meta$tissue == paired_tissue[2, i], ]),
-		nThreads=8  # might not work?
+		nThreads=4
 	)
 	gc()  # garbage collection
 
@@ -182,12 +165,12 @@ for (i in 1:ncol(paired_tissue)) {
 	cmat = abs(cmat)
 	gc()
 
-	abs_cor_min = quantile(cmat, cor_quant)
-	gc()
+	# opts$abs_cor_min = quantile(cmat, cor_quant)
+	# gc()
 
 	# Drop entries below threshold
-	message("converting to sparse matrix, abs_cor_min: ", abs_cor_min)
-	cmat[cmat < abs_cor_min] = 0
+	message("converting to sparse matrix, abs_cor_min: ", opts$abs_cor_min)
+	cmat[cmat < opts$abs_cor_min] = 0
 	gc()
 
 	# Convert to sparse matrix, for increased efficiency
@@ -197,7 +180,7 @@ for (i in 1:ncol(paired_tissue)) {
 
 	# Returns scale-free distribution fits and connectivity vectors for each tissue
 	# at the power series.
-	fits = lapply(powers, function(pow) {
+	fits = sapply(opts$powers, function(pow) {
 		message("power: ", pow)
 		# message("\tadjusting weights...")
 		cmat_power = cmat^pow
@@ -208,17 +191,16 @@ for (i in 1:ncol(paired_tissue)) {
 		k2 = apply(cmat_power, 2, sum)
 
 		# message("\tfitting scale-free connectivity model")
-		fit = scaleFreeFitIndex(c(k1, k2), nBreaks=n_breaks, removeFirst=TRUE)
+		fit = scaleFreeFitIndex(c(k1, k2), nBreaks=opts$n_breaks, removeFirst=TRUE)
 		gc()
-		return(list(fit=fit, k1=k1, k2=k2))
+		return(fit)
+		# return(list(fit=fit, k1=k1, k2=k2))
 	})
 
 	con_eval_pairs[[i]] = fits
-	gc()
 }
 names(con_eval_pairs) = apply(paired_tissue, 2, paste, collapse="_")
 
 dir.create("output")
-save(con_eval, file="output/thresh_eval.RData")
-save(con_eval_pairs, file="output/thresh_eval_pairs.RData")
-
+save(opts, con_eval, con_eval_pairs file="output/con_eval.RData")
+# save(con_eval_pairs, file="output/thresh_eval_pairs.RData")

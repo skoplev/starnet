@@ -23,7 +23,7 @@ opts$powers = seq(0.1, 10, length.out=51)
 
 opts$n_breaks = 50  # discrete bins of connectivity distribution
 
-opts$abs_cor_min = 0.2  # minimum correlation to be considered
+# opts$abs_cor_min = 0.2  # minimum correlation to be considered
 # cor_quant = 0.95
 
 
@@ -105,20 +105,20 @@ for (i in 1:length(unique(row_meta$tissue))) {
 	# opts$abs_cor_min = quantile(cmat, cor_quant)
 	# gc()
 
-	# Drop entries below threshold
-	message("converting to sparse matrix, abs_cor_min: ", opts$abs_cor_min)
-	cmat[cmat < opts$abs_cor_min] = 0  # delete entries
-	gc()
+	# # Drop entries below threshold
+	# message("converting to sparse matrix, abs_cor_min: ", opts$abs_cor_min)
+	# cmat[cmat < opts$abs_cor_min] = 0  # delete entries
+	# gc()
 
-	# Convert to sparse, symmetric matrix, for increased efficiency
-	cmat = forceSymmetric(cmat)
-	gc()
+	# # Convert to sparse, symmetric matrix, for increased efficiency
+	# cmat = forceSymmetric(cmat)
+	# gc()
 
-	cmat = Matrix(cmat, sparse=TRUE)
-	gc()
+	# cmat = Matrix(cmat, sparse=TRUE)
+	# gc()
 
-	message("non-zero coefficients: ", nnzero(cmat))
-	gc()
+	# message("non-zero coefficients: ", nnzero(cmat))
+	# gc()
 
 	# Returns scale-free distribution fits and connectivity vectors for each tissue
 	# at the power series.
@@ -140,6 +140,7 @@ for (i in 1:length(unique(row_meta$tissue))) {
 	})
 
 	con_eval[[i]] = fits
+	gc()
 }
 
 
@@ -168,15 +169,15 @@ for (i in 1:ncol(paired_tissue)) {
 	# opts$abs_cor_min = quantile(cmat, cor_quant)
 	# gc()
 
-	# Drop entries below threshold
-	message("converting to sparse matrix, abs_cor_min: ", opts$abs_cor_min)
-	cmat[cmat < opts$abs_cor_min] = 0
-	gc()
+	# # Drop entries below threshold
+	# message("converting to sparse matrix, abs_cor_min: ", opts$abs_cor_min)
+	# cmat[cmat < opts$abs_cor_min] = 0
+	# gc()
 
-	# Convert to sparse matrix, for increased efficiency
-	cmat = Matrix(cmat, sparse=TRUE)
-	message("non-zero coefficients: ", nnzero(cmat))
-	gc()
+	# # Convert to sparse matrix, for increased efficiency
+	# cmat = Matrix(cmat, sparse=TRUE)
+	# message("non-zero coefficients: ", nnzero(cmat))
+	# gc()
 
 	# Returns scale-free distribution fits and connectivity vectors for each tissue
 	# at the power series.
@@ -198,6 +199,7 @@ for (i in 1:ncol(paired_tissue)) {
 	})
 
 	con_eval_pairs[[i]] = fits
+	gc()
 }
 names(con_eval_pairs) = apply(paired_tissue, 2, paste, collapse="_")
 

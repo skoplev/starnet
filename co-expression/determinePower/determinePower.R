@@ -16,7 +16,8 @@
 opts = list()
 # Picking a soft power threshold to get scale-free correlation networks from each tissue alone
 # opts$powers = seq(1, 10, length.out=20)
-opts$powers = seq(0.1, 10, length.out=51)
+# opts$powers = seq(0.1, 10, length.out=51)
+opts$powers = seq(0.5, 10, length.out=20)
 # opts$powers = seq(1, 5, length.out=50)
 # opts$powers = seq(0.1, 10, length.out=50)
 # block_size = 4000
@@ -204,5 +205,5 @@ for (i in 1:ncol(paired_tissue)) {
 names(con_eval_pairs) = apply(paired_tissue, 2, paste, collapse="_")
 
 dir.create("output")
-save(opts, con_eval, con_eval_pairs file="output/con_eval.RData")
+save(opts, con_eval, con_eval_pairs file="output/con_eval2.RData")
 # save(con_eval_pairs, file="output/thresh_eval_pairs.RData")

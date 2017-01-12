@@ -8,7 +8,7 @@ mkdir logs
 bsub -J determinePower \
 	-P acc_STARNET \
 	-q alloc \
-	-W 108:00 \
+	-W 80:00 \
 	-n 1 \
 	-R rusage[mem=72000] \
 	-e logs/error.%J \

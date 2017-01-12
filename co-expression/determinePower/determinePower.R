@@ -205,5 +205,5 @@ for (i in 1:ncol(paired_tissue)) {
 names(con_eval_pairs) = apply(paired_tissue, 2, paste, collapse="_")
 
 dir.create("output")
-save(opts, con_eval, con_eval_pairs file="output/con_eval2.RData")
+save(opts, con_eval, con_eval_pairs, file="output/con_eval2.RData")
 # save(con_eval_pairs, file="output/thresh_eval_pairs.RData")

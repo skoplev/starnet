@@ -189,6 +189,9 @@ names(expr_mats) = expr_files
 
 
 
+
+
+
 # Normalize using size factors from DESeq2
 # ---------------------------------------------------------------
 # converts $id to rownames of returned matrices
@@ -219,16 +222,41 @@ expr_mats_norm = sapply(expr_mats, function(emat) {
 # save(expr_mats_norm, file=file.path(data_dir, "STARNET/gene_exp_norm/all.RData"))
 # load(file.path(data_dir, "STARNET/gene_exp_norm/all.RData"))
 
-min_sd = 0.5  # at the count level
-# Variance filter and pseudo-log2 transform
-message("Filtering transcripts based on standard deviation")
-expr_mats_norm = lapply(expr_mats_norm, function(mat) { 
-	# Filter genes based on standard deviation
-	mat = mat[apply(mat, 1, sd, na.rm=T) > min_sd, ]
+# mat = expr_mats_norm[[1]]
 
-	mat = log2(mat + 1)
+# lapply(expr_mats_norm, dim)
+frac_detect = 0.1  # fraction of samples that must detect 
+message("Filtering transcripts based on detection limit")
+expr_mats_norm = lapply(expr_mats_norm, function(mat) {
+
+	# Calculate the number of samples containing some RNA
+	rna_detected = apply(mat > 5, 1, sum)
+	# Number of samples for each RNA
+	n = apply(mat, 1, function(row) sum(!is.na(row)))
+
+	# Filter transcript based on fraction of sample where the RNA is above detection limit
+	rna_include = (rna_detected / n) > frac_detect
+
+	mat = mat[rna_include,]
+
 	return(mat)
 })
+
+
+# min_sd = 0.5  # at the count level
+# # Variance filter and pseudo-log2 transform
+# message("Filtering transcripts based on standard deviation")
+# expr_mats_norm = lapply(expr_mats_norm, function(mat) { 
+# 	# Filter genes based on standard deviation
+# 	mat = mat[apply(mat, 1, sd, na.rm=T) > min_sd, ]
+
+# 	return(mat)
+# })
+
+
+# Log transform
+expr_mats_norm = lapply(expr_mats_norm,
+	function(mat) log2(mat + 1))
 
 # Rename expr mats
 names(expr_mats_norm) = sapply(
@@ -435,6 +463,9 @@ for (i in 1:length(expr_mats_batch)) {
 # save(expr_mats_batch, file=file.path(data_dir, "STARNET/gene_exp_norm_batch/all.RData"))
 save(expr_mats_batch, file=file.path(data_dir, "STARNET/gene_exp_norm_batch/all.RData"))
 
+# OLD 
+# ------------------------------
+
 # load(file.path(data_dir, "STARNET/gene_exp_norm_batch/all.RData"))
 # expr_mats_batch = lapply(expr_mats_batch, t)
 
@@ -460,107 +491,107 @@ save(expr_mats_batch, file=file.path(data_dir, "STARNET/gene_exp_norm_batch/all.
 # 	trace="none")
 
 
-# Batch correction using
-# Batch correction, using read lengths 50 and 100 bp, along with flowcell.
-# Technical batch correction and adjustments.
-# Also filters transcripts based on standard deviation
-# ------------------------------------------------------
-expr_mats_combatch = lapply(expr_mats_norm, function(mat) {
+# # Batch correction using
+# # Batch correction, using read lengths 50 and 100 bp, along with flowcell.
+# # Technical batch correction and adjustments.
+# # Also filters transcripts based on standard deviation
+# # ------------------------------------------------------
+# expr_mats_combatch = lapply(expr_mats_norm, function(mat) {
 
-	# Match technical covariates
-	covar_matched = covar[match(colnames(mat), covar$id), ]
+# 	# Match technical covariates
+# 	covar_matched = covar[match(colnames(mat), covar$id), ]
 
-	# Identify batches
-	batch = covar_matched$read_length
-	if (all(is.na(batch))) {
-		batch[is.na(batch)] = 100  # default read length if all are missing
-	}
-	batch[is.na(batch)] = median(batch, na.rm=T)  # impute missing batches
-	batch = factor(batch)
+# 	# Identify batches
+# 	batch = covar_matched$read_length
+# 	if (all(is.na(batch))) {
+# 		batch[is.na(batch)] = 100  # default read length if all are missing
+# 	}
+# 	batch[is.na(batch)] = median(batch, na.rm=T)  # impute missing batches
+# 	batch = factor(batch)
 
-	# subj_range = range(as.numeric(covar$subject), na.rm=TRUE)
-	# # batch = cut(as.numeric(covar_matched$subject), 20)
-	# batch = cut(as.numeric(covar_matched$subject), seq(subj_range[1], subj_range[2], length.out=11))
-	# batch[is.na(batch)] = levels(batch)[10]
+# 	# subj_range = range(as.numeric(covar$subject), na.rm=TRUE)
+# 	# # batch = cut(as.numeric(covar_matched$subject), 20)
+# 	# batch = cut(as.numeric(covar_matched$subject), seq(subj_range[1], subj_range[2], length.out=11))
+# 	# batch[is.na(batch)] = levels(batch)[10]
 
-	# Correct batch effects
-	# Model matrix taking into acount primariy covariates
-	options(na.action="na.pass")  # keep NA rows in model matrix
+# 	# Correct batch effects
+# 	# Model matrix taking into acount primariy covariates
+# 	options(na.action="na.pass")  # keep NA rows in model matrix
 
-	# modcombat = model.matrix(~1 + flowcell, data=covar_matched)
+# 	# modcombat = model.matrix(~1 + flowcell, data=covar_matched)
 
-	# Default model
-	modcombat = model.matrix(~1, data=covar_matched)
+# 	# Default model
+# 	modcombat = model.matrix(~1, data=covar_matched)
 
-	tryCatch({
-		flow_model = multiCatModelMatrix(covar_matched$flowcell)
+# 	tryCatch({
+# 		flow_model = multiCatModelMatrix(covar_matched$flowcell)
 
-		# Remove flows with few samples
-		flow_model = flow_model[, apply(flow_model, 2, sum) > 5]
+# 		# Remove flows with few samples
+# 		flow_model = flow_model[, apply(flow_model, 2, sum) > 5]
 
-		# Remove linear combinations of the batch and flow model
-		dependent_col = fixDependence(
-			data.matrix(as.numeric(batch)),
-			data.matrix(flow_model))
+# 		# Remove linear combinations of the batch and flow model
+# 		dependent_col = fixDependence(
+# 			data.matrix(as.numeric(batch)),
+# 			data.matrix(flow_model))
 
-		flow_model = flow_model[, !1:ncol(flow_model) %in% dependent_col]
+# 		flow_model = flow_model[, !1:ncol(flow_model) %in% dependent_col]
 
-		# Remove linear dependencies from flow_model using singular value decomposition
-		# epsilon = 10^-6  # small value definition
-		flow_svd = svd(flow_model)
+# 		# Remove linear dependencies from flow_model using singular value decomposition
+# 		# epsilon = 10^-6  # small value definition
+# 		flow_svd = svd(flow_model)
 
-		# flow_model = flow_svd$u[ , flow_svd$d > epsilon]
-		flow_model = flow_svd$u[ , flow_svd$d > 4.0]
-		flow_model = data.frame(flow_model)
+# 		# flow_model = flow_svd$u[ , flow_svd$d > epsilon]
+# 		flow_model = flow_svd$u[ , flow_svd$d > 4.0]
+# 		flow_model = data.frame(flow_model)
 
-		# Age and sex covariates
-		# covar_model = covar_matched[, c("sex", "age"), with=FALSE]
-		covar_model = covar_matched[, c("sex", "age", "subject"), with=FALSE]
+# 		# Age and sex covariates
+# 		# covar_model = covar_matched[, c("sex", "age"), with=FALSE]
+# 		covar_model = covar_matched[, c("sex", "age", "subject"), with=FALSE]
 
-		# Impute to median for missing covariates
-		covar_model$sex[is.na(covar_model$sex)] = median(covar_model$sex, na.rm=TRUE)
-		covar_model$age[is.na(covar_model$age)] = median(covar_model$age, na.rm=TRUE)
-		covar_model$subject[covar_model$subject == "117A"] = "117"
-		covar_model$subject[is.na(covar_model$subject)] = median(covar_model$subject, na.rm=TRUE)
-		covar_model$subject = as.numeric(covar_model$subject)
-		# covar_model$read_length[is.na(covar_model$read_length)] = "100"  # default
+# 		# Impute to median for missing covariates
+# 		covar_model$sex[is.na(covar_model$sex)] = median(covar_model$sex, na.rm=TRUE)
+# 		covar_model$age[is.na(covar_model$age)] = median(covar_model$age, na.rm=TRUE)
+# 		covar_model$subject[covar_model$subject == "117A"] = "117"
+# 		covar_model$subject[is.na(covar_model$subject)] = median(covar_model$subject, na.rm=TRUE)
+# 		covar_model$subject = as.numeric(covar_model$subject)
+# 		# covar_model$read_length[is.na(covar_model$read_length)] = "100"  # default
 
-		# Construct covariate object from flow_model
-		# modcombat = model.matrix(~1 + ., data=flow_model)  # sets modcombat
-		modcombat = model.matrix(~1 + ., data=cbind(covar_model, flow_model))  # sets modcombat
-	}, error=function(e) {
-		warning(e)
-		warning("1st sample: ", colnames(mat)[1])
-	})
+# 		# Construct covariate object from flow_model
+# 		# modcombat = model.matrix(~1 + ., data=flow_model)  # sets modcombat
+# 		modcombat = model.matrix(~1 + ., data=cbind(covar_model, flow_model))  # sets modcombat
+# 	}, error=function(e) {
+# 		warning(e)
+# 		warning("1st sample: ", colnames(mat)[1])
+# 	})
 
-	# Batch corrected expression matrix
-	tryCatch({
-		batch_mat = ComBat(mat,
-			batch=batch,
-			mod=modcombat  # model with first column maintained and rest subtracted
-		)
-		return(batch_mat)
-	}, error=function(e) {
-		warning(e)
-		warning("1st sample: ", colnames(mat)[1])
-		# Use expression matrix as batch corrected data
-		return(NA)
-	})
-})
-lapply(expr_mats_batch, dim)
+# 	# Batch corrected expression matrix
+# 	tryCatch({
+# 		batch_mat = ComBat(mat,
+# 			batch=batch,
+# 			mod=modcombat  # model with first column maintained and rest subtracted
+# 		)
+# 		return(batch_mat)
+# 	}, error=function(e) {
+# 		warning(e)
+# 		warning("1st sample: ", colnames(mat)[1])
+# 		# Use expression matrix as batch corrected data
+# 		return(NA)
+# 	})
+# })
+# lapply(expr_mats_batch, dim)
 
-# Write normalized matrices as .tsv files
-dir.create(file.path(data_dir, "STARNET/gene_exp_norm_batch"))
-for (i in 1:length(expr_mats_batch)) {
-	message("writing ", names(expr_mats_batch)[i])
+# # Write normalized matrices as .tsv files
+# dir.create(file.path(data_dir, "STARNET/gene_exp_norm_batch"))
+# for (i in 1:length(expr_mats_batch)) {
+# 	message("writing ", names(expr_mats_batch)[i])
 
-	write.table(expr_mats_batch[[i]],
-		file.path(data_dir, "STARNET/gene_exp_norm_batch", names(expr_mats_batch)[i]),
-		sep="\t",
-		quote=FALSE, col.names=NA
-	)
-}
-save(expr_mats_batch, file=file.path(data_dir, "STARNET/gene_exp_norm_batch/all.RData"))
+# 	write.table(expr_mats_batch[[i]],
+# 		file.path(data_dir, "STARNET/gene_exp_norm_batch", names(expr_mats_batch)[i]),
+# 		sep="\t",
+# 		quote=FALSE, col.names=NA
+# 	)
+# }
+# save(expr_mats_batch, file=file.path(data_dir, "STARNET/gene_exp_norm_batch/all.RData"))
 
 
 

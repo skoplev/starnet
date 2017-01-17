@@ -1,4 +1,144 @@
-i = 17
+library(RColorBrewer)
+library(reshape2)
+library(gplots)
+
+setwd("/Users/sk/Google Drive/projects/cross-tissue/co-expression/determinePower")
+
+# Calculates optimal beta values from matrix of linear regression fits
+# using the scale-free R^2 criterion from WGCNA.
+# FInds lowest beta above threhshold
+getOptimalBeta = function(con_eval, powers, beta_min=0.85) {
+	betas = lapply(con_eval, function(x) {
+		# Exclude powers below 1.
+		include_powers = powers > 0.999
+		pow = powers[include_powers]
+		beta = unlist(x[1, include_powers])
+
+		# first beta above threshold
+		best_pow = pow[min(which(beta > beta_min))]
+		# or highest beta
+		if (is.na(best_pow)) {
+			# best_pow = pow[which.max(beta)]
+			best_pow = pow[min(which(beta / max(beta, na.rm=TRUE) > 0.975), na.rm=TRUE)]
+		}
+		return(best_pow)
+	})
+	return(unlist(betas))
+}
+
+
+# Load outout
+load('~/DataProjects/cross-tissue/STARNET/determine_power/con_eval2.RData')
+
+
+# Load tissue specification. Not strictly necesary
+load(opts$emat_file, verbose=TRUE)
+
+data_dir = "/Users/sk/DataProjects/cross-tissue"
+
+# Load imputed recast gene expression matrix
+opts$emat_file = file.path(data_dir, "STARNET/gene_exp_norm_batch_imp/all.RData")
+
+# Load reshaped gene expression matrix
+load(opts$emat_file, verbose=TRUE)
+
+# Get tissue names
+tissues = unique(row_meta$tissue)
+
+names(con_eval) = tissues
+
+# R^2 powers plot for each tissue
+i = 1
+
+
+tissue_col = brewer.pal(9, "Set1")[c(1:5, 7:9)]
+
+# Separate tissue codes
+tissue_pairs = lapply(
+	names(con_eval_pairs),
+	function(s) strsplit(s, "_")[[1]]
+)
+
+
+pdf("plots/beta_series.pdf", height=9, width=5)
+par(mfrow=c(4, 2))
+for (i in 1:length(con_eval)) {
+	tissue = names(con_eval)[i]
+
+	# Plot within-tissue R^2 curve
+	plot(opts$powers,
+		con_eval[[i]][1,],
+		type="l",
+		main=tissue,
+		ylim=c(0, 1),
+		lwd=2,
+		ylab=expression(R^2),
+		xlab=expression(beta)
+	)
+
+	# find pairwise ids involving ith tissue
+	idx = which(sapply(tissue_pairs, function(x) tissue %in% x))
+
+	for (j in idx) {
+		to_tis = tissue_pairs[[j]][tissue_pairs[[j]] != tissue]
+
+		lines(opts$powers,
+			con_eval_pairs[[j]][1,],
+			col=tissue_col[match(to_tis, tissues)],
+			lwd=1.5
+		)
+		tissue_pairs
+	}
+}
+
+plot(0, 0, type="n")
+legend("bottomleft", legend=tissues, col=tissue_col, pch=15, cex=1.0)
+dev.off()
+
+# Get matrix of optimal beta values
+
+tissue_opt = data.frame(Reduce(rbind, tissue_pairs))
+colnames(tissue_opt) = c("tissueA", "tissueB")
+
+tissue_opt$beta = getOptimalBeta(con_eval_pairs, opts$powers)
+
+
+# Dublicate for each tissue combination, for making the symmetrical parts of the beta matrix
+tissue_inv = tissue_opt
+tissue_inv[, c(1, 2)] = tissue_opt[, c(2, 1)]  # swap
+
+tissue_opt = rbind(tissue_opt, tissue_inv)  # combine
+
+
+# within tissue beta balues
+tissue_within_opt = data.frame(
+	tissueA=tissues, tissueB=tissues,
+	beta=getOptimalBeta(con_eval, opts$powers))
+
+tissue_opt = rbind(tissue_opt, tissue_within_opt)
+
+# Reshape data into beta matrix
+beta_df = dcast(tissue_opt, tissueA~tissueB)
+beta_mat = data.matrix(beta_df[, 2:ncol(beta_df)])
+rownames(beta_mat) = beta_df[, 1]
+
+# Plot beta matrix as heatmap
+pdf("plots/betas.pdf", width=5, height=5)
+heatmap.2(beta_mat,
+	cellnote=beta_mat,
+	trace="none",
+	col=colorRampPalette(rev(brewer.pal(9, "Spectral")))(21),
+	notecol="black"
+)
+dev.off()
+
+# --------------------------
+
+plot(opts$powers,
+	con_eval_pairs[[i]][1,],
+	type="l",
+	main=names(con_eval_pairs)[i]
+)
 
 plot(con_eval_pairs[[i]]$fitIndices$Power,
 	con_eval_pairs[[i]]$fitIndices$SFT.R.sq,

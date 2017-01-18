@@ -202,7 +202,12 @@ for (i in 1:ncol(paired_tissue)) {
 	con_eval_pairs[[i]] = fits
 	gc()
 }
-names(con_eval_pairs) = apply(paired_tissue, 2, paste, collapse="_")
+# names(con_eval_pairs) = apply(paired_tissue, 2, paste, collapse="_")
+
+names(con_eval_pairs) = apply(paired_tissue, 2, function(fac) {
+	paste(levels(paired_tissue)[fac], collapse="_")
+})
+
 
 dir.create("output")
 save(opts, con_eval, con_eval_pairs, file="output/con_eval2.RData")

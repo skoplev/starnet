@@ -2,6 +2,7 @@ library(RColorBrewer)
 library(reshape2)
 library(gplots)
 
+rm(list=ls())
 setwd("/Users/sk/Google Drive/projects/cross-tissue/co-expression/determinePower")
 
 # Calculates optimal beta values from matrix of linear regression fits
@@ -28,11 +29,12 @@ getOptimalBeta = function(con_eval, powers, beta_min=0.85) {
 
 
 # Load outout
-load('~/DataProjects/cross-tissue/STARNET/determine_power/con_eval2.RData')
+# load('~/DataProjects/cross-tissue/STARNET/determine_power/con_eval2.RData')
+load('~/DataProjects/cross-tissue/STARNET/determine_power/con_eval.RData')
 
 
 # Load tissue specification. Not strictly necesary
-load(opts$emat_file, verbose=TRUE)
+# load(opts$emat_file, verbose=TRUE)
 
 data_dir = "/Users/sk/DataProjects/cross-tissue"
 
@@ -44,8 +46,15 @@ load(opts$emat_file, verbose=TRUE)
 
 # Get tissue names
 tissues = unique(row_meta$tissue)
-
+# tissues = names(con_eval)
 names(con_eval) = tissues
+
+paired_tissue = combn(unique(row_meta$tissue), 2)
+names(con_eval_pairs) = apply(paired_tissue, 2, function(fac) {
+	paste(levels(paired_tissue)[fac], collapse="_")
+})
+
+
 
 # R^2 powers plot for each tissue
 i = 1

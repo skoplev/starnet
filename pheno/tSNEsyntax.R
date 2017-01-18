@@ -160,19 +160,27 @@ covar = fread(file.path(
 senescent = read_excel("~/Google Drive/projects/senescence-markers/targets/from_zhidong/1368 genes significant across 6 cell lines.xlsx")
 
 # Load imputed recast gene expression matrix
-load(file.path(data_dir, "STARNET/gene_exp_norm_batch_imp/all.RData"), verbose=TRUE)
+# load(file.path(data_dir, "STARNET/gene_exp_norm_batch_imp/all.RData"), verbose=TRUE)
+
+# Load batch corrected expression data for each tissue
+# load(file.path(data_dir, "STARNET/gene_exp_norm_batch/all.RData"), verbose=TRUE)
+
+load(file.path(data_dir, "STARNET/gene_exp_norm_reshape/expr_recast.RData"), verbose=TRUE)
+mat = expr_recast[, 3:ncol(expr_recast)]
+mat = data.matrix(mat)
+row_meta = expr_recast[, 1:2]
+
 
 # Match phenotype data to selected gene expression matrix
 pheno_matched = pheno[match(colnames(mat), pheno$starnet.ID), ]
 
-# Load batch corrected expression data for each tissue
-load(file.path(data_dir, "STARNET/gene_exp_norm_batch/all.RData"), verbose=TRUE)
 
-# Rename loaded normalized gene expression matrices
-names(expr_mats_batch) = sapply(
-	strsplit(names(expr_mats_batch), "[.]"),
-	function(x) x[4]
-)
+# # Rename loaded normalized gene expression matrices
+# names(expr_mats_batch) = sapply(
+# 	strsplit(names(expr_mats_batch), "[.]"),
+# 	function(x) x[4]
+# )
+
 
 # Rename columns to STARNET patient IDs
 # expr_mats_norm = lapply(expr_mats_norm, function(mat) {
@@ -184,8 +192,84 @@ names(expr_mats_batch) = sapply(
 
 scaled_mat = t(scale(t(mat)))
 
+scaled_mat[is.na(scaled_mat)] = 0
+
+# # Principal components
+# pca = prcomp(t(scaled_mat))
+
+# embed = pca$x[, 1:2]
+
+# par(mfrow=c(2, 2))
+# tsnePlotSyntax(pca$x[, 1:2], pheno_matched)
+
+
+# col = colorGradient(
+# 	gradlim=range(as.numeric(pheno$starnet.ID), na.rm=T),
+# 	# as.numeric(pheno_matched$starnet.ID),
+# 	as.numeric(pheno_matched$starnet.ID),
+# 	colors=rev(brewer.pal(9, "Spectral")))
+# tsnePlot(pca$x[, 1:2],
+# 	col=col,
+# 	pch=16,
+# 	main="STARNET ID"
+# )
+# legendCol(colorRampPalette(rev(brewer.pal(9, "Spectral")))(20), range(as.numeric(pheno$starnet.ID), na.rm=T))
+
+
+# All transcripts combined across tissues
+# -------------------------------------
+dmat = Dist(t(scaled_mat), method="euclidean", nbproc=6)
+
+embed = tsne(dmat, max_iter=2000, perplexity=30)
+
+par(mfrow=c(3, 2))
+tsnePlotSyntax(embed, pheno_matched)
+
+col = colorGradient(
+	gradlim=range(as.numeric(pheno$starnet.ID), na.rm=T),
+	# as.numeric(pheno_matched$starnet.ID),
+	as.numeric(pheno_matched$starnet.ID),
+	colors=rev(brewer.pal(9, "Spectral")))
+tsnePlot(embed,
+	col=col,
+	pch=16,
+	main="STARNET ID"
+)
+legendCol(colorRampPalette(rev(brewer.pal(9, "Spectral")))(20), range(as.numeric(pheno$starnet.ID), na.rm=T))
+
+
+# Tissue-specific tSNE plots
+dmat_tissue = list()
+embed_tissue = list()
+# i = 1
+for (i in 1:length(unique(row_meta$tissue))) {
+	idx = row_meta$tissue == unique(row_meta$tissue)[i]
+
+	dmat_tissue[[i]] = Dist(t(scaled_mat[idx, ]), method="euclidean", nbproc=6)
+	embed_tissue[[i]] = tsne(dmat_tissue[[i]], max_iter=1000, perplexity=30)
+}
+
+
+names(dmat_tissue) = unique(row_meta$tissue)
+names(embed_tissue) = unique(row_meta$tissue)
+
+
+i = 6
+
+names(embed_tissue)[i]
+par(mfrow=c(2, 2))
+tsnePlotSyntax(embed_tissue[[i]], pheno_matched)
+
+
+
+
+
+
+
+# Senescent selection of transcripts
 row_meta$gene_symbol = sapply(strsplit(as.character(row_meta$transcript_id), "_"), function(x) x[1])
 sel_transcripts = row_meta$gene_symbol %in% senescent$Gene.Symbol
+
 
 
 # ---------------------------------------
@@ -377,6 +461,7 @@ plot(dend)
 # tsnePlotSyntax(embed, pheno_matched)
 
 
+# Filtered correlation with SYNTAX plots
 pdf("pheno/plots/all_tissue/syntax_cor_all_tSNE.pdf", width=7, height=6)
 embed = tsneSyntaxCmp(mat, pheno_matched, row_meta)
 tsnePlotSyntax(embed, pheno_matched)

@@ -14,6 +14,8 @@ library(plyr)
 library(MASS)
 library(parallel)
 library(penalized)
+library(hexbin)
+
 
 library(compiler)
 enableJIT(3)
@@ -325,7 +327,7 @@ expr_mats_batch = lapply(seq_along(expr_mats_norm), function(i) {
 	# pheno_model[is.na(pheno_model)] = 0
 
 
-	# Covariance model
+	# Covariate model
 	# ------------------------------------------
 
 	covar_model = covar_matched[, c("sex", "age", "read_length", "lab", "protocol"), with=FALSE]
@@ -414,7 +416,7 @@ expr_mats_batch = lapply(seq_along(expr_mats_norm), function(i) {
 	age_col = which(colnames(adjust_model) == "age")
 	adjust_model[, age_col] = adjust_model[, age_col] / 100
 
-	# L2 penlized regression model.
+	# L2 penalized regression model.
 	# log caputes excessive newline output
 	message("Fitting penalized regresssion models with ", ncol(adjust_model), " parameters.")
 	log = capture.output({
@@ -438,11 +440,138 @@ expr_mats_batch = lapply(seq_along(expr_mats_norm), function(i) {
 
 	return(adjust_mat)
 
-	# plot(mat[1:50, ], adjust_mat[1:50, ])
-	# return(t(residual_mat))
+	# Interactive plots of the effects of adjustment on correlations.
+	#
+	# ---------------------------------------------------------------
+
 
 	# Get linear regression coefficients
 	# coefs = sapply(fits, coefficients)
+
+	# Test to see if correlational structure is maintained
+	idx = sample(nrow(mat), 1000)
+	# idx = 1:1000
+
+	cmat = cor(t(mat[idx, ]))
+	cmat_adj = cor(t(adjust_mat[idx, ]))
+
+	# Hexplot comparing correlations with adjusted correlations with beta calibration curves.
+	betas = c(1.0, 1.5, 2.0, 2.5)
+
+	# Linear for of correlation and adjusted correlations
+	fit = lm(cmat[lower.tri(cmat)]~cmat_adj[lower.tri(cmat_adj)])
+
+	pdf("norm/plots/adjust/aor_1000genes_cor_adj.pdf")
+
+	hb = hexbin(cmat[lower.tri(cmat)], cmat_adj[lower.tri(cmat_adj)],
+		xbins=100)
+
+	p = plot(hb,
+		xlab="r",
+		ylab="Adjusted r",
+		main=paste("R^2=", format(summary(fit)$r.squared, digits=3),
+			"beta=", paste(betas, collapse=",")),
+		colramp=colorRampPalette(rev(brewer.pal(11, 'Spectral'))))
+
+	pushHexport(p$plot.vp)
+
+	# beta calibration lines
+	x = seq(0, 1, length.out=50)
+
+	for (i in 1:length(betas)) {
+		beta = betas[i]
+		line_col = gray.colors(length(betas))[i]
+
+		grid.lines(x, x^beta, gp=gpar(col=line_col, lwd=2.0), default.units="native")
+		grid.lines(-x, -x^beta, gp=gpar(col=line_col, lwd=2.0), default.units="native")
+	}
+	upViewport()
+	dev.off()
+
+
+	# Density estimate plots
+	pdf("norm/plots/adjust/aor_1000genes_cor_distr.pdf", width=4, height=3)
+	cols = c("black", brewer.pal(9, "Set1")[1])
+	plot(density(cmat_adj[lower.tri(cmat_adj)]),
+		lwd=2, col=cols[2],
+		xlab="r")
+	lines(density(cmat[lower.tri(cmat)]), lwd=2, col=cols[1])
+	legend("topright", legend=c("Ori.", "Adj."), col=cols, pch=15)
+	dev.off()
+
+
+	# Boxplot comparison of 
+	pdf("norm/plots/adjust/aor_1000genes_boxplot_r05.pdf", width=4, height=5)
+	cor_thresh = 0.5
+	par(bty="n")
+	boxplot(
+		list(
+			Ori.=cmat[lower.tri(cmat) & cmat <= -cor_thresh],
+			Adj.=cmat_adj[lower.tri(cmat_adj) & cmat <= -cor_thresh],
+			Ori.=cmat[lower.tri(cmat) & cmat > cor_thresh],
+			Adj.=cmat_adj[lower.tri(cmat_adj) & cmat > cor_thresh]
+		),
+		las=2,
+		cex=0.2,
+		ylim=c(-1, 1),
+		# col=brewer.pal(3, "Set1")[1:2]
+		# col=gray.colors(2)
+		col=brewer.pal(6, "Paired")[c(2, 1, 6, 5)],
+		ylab="r"
+	)
+	abline(h=0, lty=2, col=gray.colors(5)[4])
+	dev.off()
+
+	# Find genes that correlate among the subsampled genes
+	high_cor = which(abs(cmat) > 0.8, arr.ind=TRUE)
+	head(high_cor, 50)
+
+	high_cor_adj = which(abs(cmat_adj) > 0.7, arr.ind=TRUE)
+	head(high_cor_adj, 50)
+
+	# n = 2231
+	# m = 35
+
+	n = idx[491]
+	m = idx[17]
+
+	# pch = as.numeric(factor(pheno_matched$Sex))
+	pdf("norm/plots/adjust/aor_1000genes_example.pdf", width=3)
+	colors = c(brewer.pal(9, "Set1"), brewer.pal(8, "Set2"), brewer.pal(12, "Set3"))
+
+	pch = as.numeric(factor(covar_matched$lab)) + 15
+	cex = (pheno_matched$Age - 30) / 80
+	col = colors[as.numeric(factor(covar_matched$flowcell))]
+
+	# range(pheno_matched$Age )
+	n_name = strsplit(rownames(mat)[n], "_")[[1]][1]
+	m_name = strsplit(rownames(mat)[m], "_")[[1]][1]
+
+	# Correlation estimates
+	cor_adj = cor.test(adjust_mat[n, ], adjust_mat[m, ])
+	cor_ori = cor.test(mat[n, ], mat[m, ])
+
+	par(mfrow=c(2, 1), bty="o")
+	plot(mat[n, ], mat[m, ],
+		pch=pch,
+		cex=cex,
+		col=col,
+		xlab=paste(n_name, expression(log(x + 1))),
+		ylab=paste(m_name, expression(log(x + 1))),
+		main=paste0("Original, r=", format(cor_ori$estimate, digits=3))
+	)
+
+	plot(adjust_mat[n, ], adjust_mat[m, ],
+		pch=pch,
+		cex=cex,
+		col=col,
+		xlab=paste(n_name, expression(log(x + 1))),
+		ylab=paste(m_name, expression(log(x + 1))),
+		# ylab=expression(log(x + 1) * (adjusted)),
+		main=paste0("Adjusted, r=", format(cor_adj$estimate, digits=3))
+	)
+	dev.off()
+
 })
 names(expr_mats_batch) = names(expr_mats_norm)
 

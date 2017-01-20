@@ -8,7 +8,10 @@ setwd("/Users/sk/Google Drive/projects/cross-tissue/co-expression/determinePower
 # Calculates optimal beta values from matrix of linear regression fits
 # using the scale-free R^2 criterion from WGCNA.
 # FInds lowest beta above threhshold
-getOptimalBeta = function(con_eval, powers, beta_min=0.85) {
+# betaSel is a function choosing the preferred beta value
+# beta_frac is the fraction of maximum allowed
+getOptimalBeta = function(con_eval, powers, beta_min=0.85, beta_frac=0.95, selBeta) {
+
 	betas = lapply(con_eval, function(x) {
 		# Exclude powers below 1.
 		include_powers = powers > 0.999
@@ -20,7 +23,9 @@ getOptimalBeta = function(con_eval, powers, beta_min=0.85) {
 		# or highest beta
 		if (is.na(best_pow)) {
 			# best_pow = pow[which.max(beta)]
-			best_pow = pow[min(which(beta / max(beta, na.rm=TRUE) > 0.975), na.rm=TRUE)]
+			# best_pow = pow[selBeta(which(beta / max(beta, na.rm=TRUE) > beta_frac))]
+			best_pow = selBeta(pow[which(beta / max(beta, na.rm=TRUE) > beta_frac)])
+			# best_pow = selBeta(pow[which(max(beta, na.rm=TRUE) - beta > 0.1)])
 		}
 		return(best_pow)
 	})
@@ -57,8 +62,7 @@ names(con_eval_pairs) = apply(paired_tissue, 2, function(fac) {
 
 
 # R^2 powers plot for each tissue
-i = 1
-
+# i = 1
 
 tissue_col = brewer.pal(9, "Set1")[c(1:5, 7:9)]
 
@@ -109,7 +113,13 @@ dev.off()
 tissue_opt = data.frame(Reduce(rbind, tissue_pairs))
 colnames(tissue_opt) = c("tissueA", "tissueB")
 
-tissue_opt$beta = getOptimalBeta(con_eval_pairs, opts$powers)
+tissue_opt$beta = getOptimalBeta(con_eval_pairs, opts$powers,
+	# selBeta=min)
+	selBeta=function(betas) {
+	betas[which.min(abs(betas - 3))]
+})
+
+mean(tissue_opt$beta)
 
 
 # Dublicate for each tissue combination, for making the symmetrical parts of the beta matrix
@@ -119,10 +129,16 @@ tissue_inv[, c(1, 2)] = tissue_opt[, c(2, 1)]  # swap
 tissue_opt = rbind(tissue_opt, tissue_inv)  # combine
 
 
-# within tissue beta balues
+# within-tissue beta balues
 tissue_within_opt = data.frame(
 	tissueA=tissues, tissueB=tissues,
-	beta=getOptimalBeta(con_eval, opts$powers))
+	# beta=getOptimalBeta(con_eval, opts$powers, beta_frac=0.95, selBeta=max)
+	beta=getOptimalBeta(con_eval, opts$powers, beta_frac=0.95,
+		selBeta=function(betas) {
+			betas[which.min(abs(betas - 6))]
+	})
+)
+mean(tissue_within_opt$beta)
 
 tissue_opt = rbind(tissue_opt, tissue_within_opt)
 
@@ -141,6 +157,10 @@ heatmap.2(beta_mat,
 )
 dev.off()
 
+mean(diag(beta_mat))
+mean(beta_mat[lower.tri(beta_mat)])
+
+# OLD
 # --------------------------
 
 plot(opts$powers,

@@ -106,7 +106,6 @@ for (phenotype in phenotypes) {
 	})
 }
 
-
 save(pheno_cor, file=file.path(data_dir, "STARNET/pheno_cor/pheno_cor.RData"))
 
 

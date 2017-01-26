@@ -157,8 +157,17 @@ heatmap.2(beta_mat,
 )
 dev.off()
 
-mean(diag(beta_mat))
-mean(beta_mat[lower.tri(beta_mat)])
+# beta_mat
+
+# Order optimal beta matrix based on tissue symbols
+beta_mat = beta_mat[order(rownames(beta_mat)), order(colnames(beta_mat))]
+
+write.csv(beta_mat, file="output/beta.csv", col.names=NA, quote=FALSE)
+
+# beta_mat2 = read.table("output/beta.csv", row.names=1, header=TRUE, sep=",")
+
+# mean(diag(beta_mat))
+# mean(beta_mat[lower.tri(beta_mat)])
 
 # OLD
 # --------------------------

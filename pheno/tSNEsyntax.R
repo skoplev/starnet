@@ -150,6 +150,12 @@ pheno = fread(file.path(
 	"STARNET_main_phenotype_table.cases.Feb_29_2016.tbl"
 ))
 
+brainshake = fread(file.path(
+	"/Volumes/SANDY/phenotype_data",
+	"tz.mat"
+))
+
+
 covar = fread(file.path(
 	"/Volumes/SANDY/phenotype_data",
 	"covariates.cases_and_controls.April_12_2016.txt"
@@ -173,47 +179,55 @@ row_meta = expr_recast[, 1:2]
 
 # Match phenotype data to selected gene expression matrix
 pheno_matched = pheno[match(colnames(mat), pheno$starnet.ID), ]
-
-
-# # Rename loaded normalized gene expression matrices
-# names(expr_mats_batch) = sapply(
-# 	strsplit(names(expr_mats_batch), "[.]"),
-# 	function(x) x[4]
-# )
-
-
-# Rename columns to STARNET patient IDs
-# expr_mats_norm = lapply(expr_mats_norm, function(mat) {
-# 	colnames(mat) = sapply(
-# 		strsplit(colnames(mat), "_"),
-# 		function(x) x[2])
-# 	return(mat)
-# })
+brainshake_matched = brainshake[match(colnames(mat), brainshake$id), ]
 
 scaled_mat = t(scale(t(mat)))
 
 scaled_mat[is.na(scaled_mat)] = 0
 
-# # Principal components
-# pca = prcomp(t(scaled_mat))
 
-# embed = pca$x[, 1:2]
+# Principal components of all tissues
+pca = prcomp(t(scaled_mat))
 
-# par(mfrow=c(2, 2))
-# tsnePlotSyntax(pca$x[, 1:2], pheno_matched)
+embed = pca$x[, 1:2]
 
+par(mfrow=c(3, 3), cex=0.4)
+tsnePlotSyntax(pca$x[, 1:2], pheno_matched)
 
-# col = colorGradient(
-# 	gradlim=range(as.numeric(pheno$starnet.ID), na.rm=T),
-# 	# as.numeric(pheno_matched$starnet.ID),
-# 	as.numeric(pheno_matched$starnet.ID),
-# 	colors=rev(brewer.pal(9, "Spectral")))
-# tsnePlot(pca$x[, 1:2],
-# 	col=col,
-# 	pch=16,
-# 	main="STARNET ID"
-# )
-# legendCol(colorRampPalette(rev(brewer.pal(9, "Spectral")))(20), range(as.numeric(pheno$starnet.ID), na.rm=T))
+col = colorGradient(
+	gradlim=range(as.numeric(pheno$starnet.ID), na.rm=T),
+	# as.numeric(pheno_matched$starnet.ID),
+	as.numeric(pheno_matched$starnet.ID),
+	colors=rev(brewer.pal(9, "Spectral")))
+tsnePlot(pca$x[, 1:2],
+	col=col,
+	pch=16,
+	main="STARNET ID"
+)
+legendCol(colorRampPalette(rev(brewer.pal(9, "Spectral")))(20), range(as.numeric(pheno$starnet.ID), na.rm=T))
+
+col = colorGradient(
+	gradlim=range(as.numeric(pheno$LDL), na.rm=T),
+	as.numeric(pheno_matched$LDL),
+	colors=rev(brewer.pal(9, "Spectral")))
+tsnePlot(pca$x[, 1:2],
+	col=col,
+	pch=16,
+	main="LDL"
+)
+legendCol(colorRampPalette(rev(brewer.pal(9, "Spectral")))(20), range(as.numeric(pheno$LDL), na.rm=T))
+
+col = colorGradient(
+	gradlim=range(as.numeric(pheno$HDL), na.rm=T),
+	as.numeric(pheno_matched$HDL),
+	colors=rev(brewer.pal(9, "Spectral")))
+tsnePlot(pca$x[, 1:2],
+	col=col,
+	pch=16,
+	main="HDL"
+)
+legendCol(colorRampPalette(rev(brewer.pal(9, "Spectral")))(20), range(as.numeric(pheno$HDL), na.rm=T))
+
 
 
 # All transcripts combined across tissues
@@ -263,37 +277,40 @@ tsnePlotSyntax(embed_tissue[[i]], pheno_matched)
 
 
 
-
-
+# ---------------------------------------
 
 # Senescent selection of transcripts
 row_meta$gene_symbol = sapply(strsplit(as.character(row_meta$transcript_id), "_"), function(x) x[1])
 sel_transcripts = row_meta$gene_symbol %in% senescent$Gene.Symbol
 
 
-
-# ---------------------------------------
-
 submat = t(scaled_mat[sel_transcripts & row_meta$tissue %in% c("AOR", "MAM"), ])  # this one!
 
 # Randomize
-# submat = submat[sample(nrow(submat)),]
 
+# k-means clustering
 clust = kmeans(submat, centers=20)$cluster
 
 # Drop clusters with less than 3 members
 clust[clust %in% which(table(clust) < 3)] = NA
 
 
-
-dmat = Dist(submat, method="euclidean", nbproc=6)
+# dmat = Dist(submat, method="euclidean", nbproc=6)
 
 # embed = tsne(dmat, max_iter=5000, perplexity=5)
-embed = tsne(submat, max_iter=5000, perplexity=30)
+# embed = tsne(submat, max_iter=5000, perplexity=30)
+# embed = tsne(submat, max_iter=1000, perplexity=50)
 
+embed = prcomp(submat)
+embed = embed$x[, 1:2]
 
-pdf("pheno/plots/patient_clusters/aor_mam_senescence_tSNE.pdf", width=6)
-par(mfrow=c(3, 2), mar=c(2, 2, 2, 3))
+# plot(embed[, 1], embed[, 2])
+# which(clust == 4)
+# pmeheno_matched[clust == 3, ]
+
+# pdf("pheno/plots/patient_clusters/aor_mam_senescence_tSNE.pdf", width=6, height=10)
+pdf("pheno/plots/patient_clusters/aor_mam_senescence_PCA.pdf", width=6, height=10)
+par(mfrow=c(4, 2), mar=c(2, 2, 2, 3), cex=0.7)
 tsnePlotSyntax(embed, pheno_matched)
 
 clust_cols = c(brewer.pal(9, "Set1"), brewer.pal(8, "Dark2"), brewer.pal(8, "Accent"))
@@ -315,6 +332,30 @@ tsnePlot(embed,
 	main="STARNET ID"
 )
 legendCol(colorRampPalette(rev(brewer.pal(9, "Spectral")))(20), range(as.numeric(pheno$starnet.ID), na.rm=T))
+
+
+col = colorGradient(
+	gradlim=range(as.numeric(pheno$LDL), na.rm=T),
+	as.numeric(pheno_matched$LDL),
+	colors=rev(brewer.pal(9, "Spectral")))
+tsnePlot(embed,
+	col=col,
+	pch=16,
+	main="LDL"
+)
+legendCol(colorRampPalette(rev(brewer.pal(9, "Spectral")))(20), range(as.numeric(pheno$LDL), na.rm=T))
+
+col = colorGradient(
+	gradlim=range(as.numeric(pheno$HDL), na.rm=T),
+	as.numeric(pheno_matched$HDL),
+	colors=rev(brewer.pal(9, "Spectral")))
+tsnePlot(embed,
+	col=col,
+	pch=16,
+	main="HDL"
+)
+legendCol(colorRampPalette(rev(brewer.pal(9, "Spectral")))(20), range(as.numeric(pheno$HDL), na.rm=T))
+
 dev.off()
 
 
@@ -335,12 +376,21 @@ ndv = lapply(unique(clust), function(k) {
 LDL = lapply(unique(clust), function(k) {
 	pheno_matched$LDL[clust == k]
 })
+HDL = lapply(unique(clust), function(k) {
+	pheno_matched$HDL[clust == k]
+})
 BMI = lapply(unique(clust), function(k) {
 	pheno_matched$BMI[clust == k]
 })
 age = lapply(unique(clust), function(k) {
 	pheno_matched$Age[clust == k]
 })
+
+# syntax_scores_mean = sapply(syntax_scores, mean, na.rm=TRUE)
+# LDL_mean = sapply(LDL, mean, na.rm=TRUE)
+# HDL_mean = sapply(HDL, mean, na.rm=TRUE)
+# plot(LDL_mean, syntax_scores_mean)
+# plot(HDL_mean, syntax_scores_mean)
 
 
 clust_order = order(
@@ -354,6 +404,7 @@ duke_scores = duke_scores[clust_order]
 lesions = lesions[clust_order]
 ndv = ndv[clust_order]
 LDL = LDL[clust_order]
+HDL = HDL[clust_order]
 BMI = BMI[clust_order]
 age = age[clust_order]
 
@@ -375,6 +426,7 @@ barplotErr(lesions, ylim=c(0, 9),
 	pt_col=red,
 	ylab="Lesions")
 barplotErr(LDL, ylim=c(0, 9), ylab="LDL")
+# barplotErr(HDL, ylim=c(0, 9), ylab="HDL")
 dev.off()
 
 # barplotErr(age, ylim=c(0, 100), ylab="Age")
@@ -383,13 +435,14 @@ dev.off()
 # barplotErr(ndv, ylim=c(0, 3), ylab="ndv")
 
 # Test all pairwise combinations of clusters
-pairwise_ttests = pairwise.t.test(pheno_matched$syntax_score, clust,
-	p.adjust="BH",
-	pool.sd=TRUE)
+# pairwise_ttests = pairwise.t.test(pheno_matched$syntax_score, clust,
+# 	p.adjust="BH",
+# 	pool.sd=TRUE)
+# sort(pairwise_ttests$p.value)
 
-sort(pairwise_ttests$p.value)
 
-
+# Pairwise phenotype per cluster test
+# ---------------------------------
 pheno_tests = lapply(colnames(pheno_matched), function(name) {
 	pairwise_ttests = pairwise.t.test(pheno_matched[[name]], clust,
 		p.adjust="BH",
@@ -399,13 +452,12 @@ pheno_tests = lapply(colnames(pheno_matched), function(name) {
 names(pheno_tests) = colnames(pheno_matched)
 
 min_pheno_pval = sapply(pheno_tests, min, na.rm=TRUE)
+min_pheno_pval = p.adjust(min_pheno_pval)
 
 sig_min_pheno_pval = min_pheno_pval[which(min_pheno_pval < 0.05)]
 sig_min_pheno_pval = sig_min_pheno_pval[order(sig_min_pheno_pval, decreasing=TRUE)]
 
-
-
-pdf("pheno/plots/patient_clusters/aor_mam_senescence_pheno_tests.pdf", width=5, height=5)
+pdf("pheno/plots/patient_clusters/aor_mam_senescence_pheno_tests.pdf", width=5, height=3)
 dotchart(-log10(sig_min_pheno_pval),
 	main="Cluster-phenotype distinctions",
 	cex.main=1.0,
@@ -414,7 +466,35 @@ dotchart(-log10(sig_min_pheno_pval),
 dev.off()
 
 
+# Pairwise Brainshake per cluster test
+# --------------------------
+brainshake_tests = lapply(colnames(brainshake_matched), function(name) {
+	pairwise_ttests = pairwise.t.test(brainshake_matched[[name]], clust,
+		p.adjust="BH",
+		pool.sd=TRUE)
+	sort(pairwise_ttests$p.value)
+})
+names(brainshake_tests) = colnames(brainshake_matched)
 
+min_pheno_pval = sapply(brainshake_tests, min, na.rm=TRUE)
+
+min_pheno_pval = p.adjust(min_pheno_pval)
+
+sig_min_pheno_pval = min_pheno_pval[which(min_pheno_pval < 0.05)]
+sig_min_pheno_pval = sig_min_pheno_pval[order(sig_min_pheno_pval, decreasing=TRUE)]
+
+# sig_min_pheno_pval = p.adjust(sig_min_pheno_pval)
+
+pdf("pheno/plots/patient_clusters/aor_mam_senescence_brainshake_tests.pdf", width=5, height=7)
+dotchart(-log10(sig_min_pheno_pval),
+	main="Cluster-phenotype distinctions",
+	cex.main=1.0,
+	pch=16,
+	xlab=expression("max -log"[10] * "p (pairwise t-tests, BH)"))
+dev.off()
+
+
+# brainshake_matched
 
 
 

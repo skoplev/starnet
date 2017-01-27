@@ -20,30 +20,30 @@ enableWGCNAThreads(nThreads=2)  # assuming 2 threads per core
 
 # Config
 # --------------------------
-
 opts = list()
 
 # Files and folders
-opts$data_dir = "/Users/sk/DataProjects/cross-tissue"  # root of data directory
+opts$data_dir = "~/DataProjects/cross-tissue"  # root of data directory
+opts$project_root = "~/Google Drive/projects/cross-tissue"
+
 opts$emat_file = "STARNET/gene_exp_norm_reshape/expr_recast.RData"
 opts$beta_mat_file = "co-expression/determinePower/output/beta.csv"
-opts$project_root = "/Users/sk/Google Drive/projects/cross-tissue"
 
 opts$beta = 3.0  # agerage from cross-tissue
 
 opts$beta_within = 5.2
 opts$beta_between = 2.7
 
-
 # methods: 
-#	single, uses a single beta value
-#	between_within, uses two different beta values for within and between tissue
-#	complete, uses a complete specification of beta  values
-opts$method = "single"
-opts$method = "between_within"
+#	single, uses a single beta value.
+#	between_within, uses two different beta values for within and between tissue.
+#	complete, uses a complete specification of beta  values.
+# opts$method = "single"
+# opts$method = "between_within"
 opts$method = "complete"
 
-opts$max_block_size = 20000
+opts$max_block_size = 5000
+opts$min_module_size = 30
 
 # Test case samples a subset of the expression matrix
 opts$test = TRUE
@@ -55,8 +55,12 @@ opts$test = TRUE
 setwd(opts$project_root)
 
 # Load optimal tissue-specific and between tissue beta values
-opts$beta_mat = read.table(, row.names=1, header=TRUE, sep=",")
+opts$beta_mat = read.table(opts$beta_mat_file, row.names=1, header=TRUE, sep=",")
 opts$beta_mat = data.matrix(opts$beta_mat)
+
+if (!all(rownames(opts$beta_mat) == colnames(opts$beta_mat))) {
+	stop("Mismatch between rownames and column names of beta matrix.")
+}
 
 if (opts$method == "between_within") {
 	# Change the beta matrix
@@ -84,8 +88,8 @@ load(file.path(opts$data_dir, opts$emat_file))
 
 # Get expression matrix from recasted data frame with all tissue 
 emat = expr_recast[, 3:ncol(expr_recast)]
-meta_gene = expr_recast[, 1:2]
-meta_gene = as.data.frame(meta_gene)
+meta_genes = expr_recast[, 1:2]
+meta_genes = as.data.frame(meta_genes)
 
 # rownames(emat) = expr_recast$transcript_id
 colnames(emat) = colnames(expr_recast)[3:ncol(expr_recast)]
@@ -102,12 +106,13 @@ emat[is.na(emat)] = 0.0  # impute to average
 # Random sample of data, for running on subset of data.
 # For test purposes only.
 if (opts$test) {
-	feature_idx = sample(1:ncol(emat), 1000)
+	# feature_idx = sample(1:ncol(emat), 1000)
+	feature_idx = sample(1:ncol(emat), 20000)
 	emat = emat[, feature_idx]
-	meta_gene = meta_gene[feature_idx, ]
+	meta_genes = meta_genes[feature_idx, ]
 }
 
-dir.create(file.path(opts$data_dir, "TOMs"))  # directory for data
+dir.create(file.path(opts$data_dir, "TOMs"))  # directory for TOM data
 
 if (opts$method == "single") {
 	# Blockwise modules with single beta value
@@ -119,9 +124,8 @@ if (opts$method == "single") {
 		nThreads=2,
 		saveTOMs=TRUE,
 		saveTOMFileBase=file.path(opts$data_dir, "TOMs/TOM"),
-		verbose=2
-	)
-else if (opts$method == "between_within" | opts$methods == "complete") {
+		verbose=2)
+} else if (opts$method == "between_within" | opts$method == "complete") {
 	# Blockwise modules with different beta values
 
 	# Preclustering centers
@@ -135,7 +139,8 @@ else if (opts$method == "between_within" | opts$methods == "complete") {
 		checkData=FALSE,
 		sizePenaltyPower=5,
 		nCenters=n_preclust_centers, 
-		verbose=2, indent=1)
+		verbose=2,
+		indent=1)
 
 	gene_blocks = .orderLabelsBySize(clust$clusters)
 
@@ -143,11 +148,11 @@ else if (opts$method == "between_within" | opts$methods == "complete") {
 	modules = rep(NA, ncol(emat))
 	for (block in unique(gene_blocks)) {
 		block_gene_idx = gene_blocks == block
-		block_tissues = meta_gene$tissue[block_gene_idx]
+		block_tissues = meta_genes$tissue[block_gene_idx]
 
 		# Calculate Pearson's co-expression correlations
-		adj_mat = cor(emat[, block_gene_idx])
-		adj_mat = abs(adj_mat)  # adjacency matrix
+		netw_mat = cor(emat[, block_gene_idx])
+		netw_mat = abs(netw_mat)  # adjacency matrix
 
 		# Adjust weights based on specificed within- and cross-tissue beta values.
 		# Loop over all tissue combinations
@@ -160,25 +165,25 @@ else if (opts$method == "between_within" | opts$methods == "complete") {
 				idx1 = block_tissues == tissue_i
 				idx2 = block_tissues == tissue_j
 
-
 				if (all(!idx1) | all(!idx2)) next
 				# otherwise, adjust
-				adj_mat[idx1, idx2] = adj_mat[idx1, idx2] ^ opts$beta_mat[i, j ]
+				netw_mat[idx1, idx2] = netw_mat[idx1, idx2] ^ opts$beta_mat[i, j ]
 			}
 		}
 
 		# Topological overalp matrix
-		tom_dist = 1 - TOMsimilarity(adj_mat)
+		# Overwrites for increased memory efficiency
+		netw_mat = 1 - TOMsimilarity(netw_mat)
 
-		#
-		hc_tree = hclust(as.dist(tom_dist), method="average")
+		# Hierarcical clustering
+		hc_tree = hclust(as.dist(netw_mat), method="average")
 
-		min_module_size = 30
-
+		# Cut tree determining the modules
 		dynamic_modules = cutreeDynamic(hc_tree,
-			distM=tom_dist,
-			deepSplit=2, pamRespectsDendro=FALSE,
-			minClusterSize=min_module_size)
+			distM=netw_mat,
+			deepSplit=2,
+			pamRespectsDendro=FALSE,
+			minClusterSize=opts$min_module_size)
 
 		dynamic_colors = labels2colors(dynamic_modules)
 
@@ -211,16 +216,17 @@ else if (opts$method == "between_within" | opts$methods == "complete") {
 
 	# Calculate eigengenes for all modules, across blocks
 	bwnet = moduleEigengenes(emat, colors=modules)
-	bwnet$colors=modules
+	bwnet$colors = modules
+	bwnet$gene_blocks = gene_blocks
 } else {
-	stop("Invalid method: " method)
+	stop("Invalid method: ", opts$method)
 }
 
 # Store modules in data directory
 dir.create(file.path(opts$data_dir, "modules"))
 
 # Store module data
-save(bwnet, meta_gene, patient_ids, opts, file=file.path(opts$data_dir, "modules", paste0(opts$method, "-cross-tissue.RData")))
+save(bwnet, meta_genes, patient_ids, opts, file=file.path(opts$data_dir, "modules", paste0(opts$method, "-cross-tissue.RData")))
 
 
 # # Load topological overlap matrix (TOM) into environment.

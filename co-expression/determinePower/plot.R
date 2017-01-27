@@ -166,8 +166,8 @@ write.csv(beta_mat, file="output/beta.csv", col.names=NA, quote=FALSE)
 
 # beta_mat2 = read.table("output/beta.csv", row.names=1, header=TRUE, sep=",")
 
-# mean(diag(beta_mat))
-# mean(beta_mat[lower.tri(beta_mat)])
+mean(diag(beta_mat))
+mean(beta_mat[lower.tri(beta_mat)])
 
 # OLD
 # --------------------------

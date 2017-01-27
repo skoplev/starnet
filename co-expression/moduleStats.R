@@ -9,7 +9,7 @@ library(magicaxis)
 data_dir = "/Users/sk/DataProjects/cross-tissue"  # root of data directory
 setwd("/Users/sk/Google Drive/projects/cross-tissue")
 
-source("co-expression/base.R")
+source("src/base.R")
 
 # Load gwnet and row_meta tables
 load(file.path(data_dir, "modules/cross-tissue.RData"))
@@ -40,7 +40,7 @@ block_tissue = countMat(block_tissue_comp)
 module_tissue = countMat(module_tissue_comp)
 # module_tissue = module_tissue[, apply(module_tissue, 2, sum) < 500]
 
-# module_size = apply(module_tissue, 2, sum)
+module_size = apply(module_tissue, 2, sum)
 # frac_secondary = 1 - apply(module_tissue, 2, max) / apply(module_tissue, 2, sum)
 
 

@@ -237,7 +237,7 @@ if (opts$method == "single") {
 }
 
 # Store modules in data directory
-dir.create(file.path(opts$data_dir, "modules"))
+dir.create(file.path(opts$data_dir, opts$out_folder))
 
 # Store module data
 save(bwnet, meta_genes, patient_ids, opts, file=file.path(opts$data_dir, opts$out_folder, paste0(opts$method, "-cross-tissue.RData")))

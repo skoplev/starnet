@@ -36,7 +36,7 @@ opts$emat_file = "cross-tissue/gene_exp_norm_reshape/expr_recast.RData"
 
 
 opts$out_folder = "modules"  # output folder in data directory, WARNING: overwrites modules in this folder!
-opts$project_root = "../"  # relative path, for loading additional libraries
+opts$project_root = ".."  # relative path, for loading additional libraries
 opts$beta_mat_file = "determinePower/output/beta.csv"
 
 

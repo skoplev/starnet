@@ -1,6 +1,10 @@
 #!/usr/bin/env Rscript
 
 # Detect modules using blockwise WGCNA and heterogenous beta values.
+#
+# Input file must be an R object containing either:
+#   - mat; matrix with data matrix, and row_meta; table with gene meta data.
+#   - expr_recast; data frame with reshaped data containing metadata in 2 first columns followed by gene expression matrix.
 
 rm(list=ls())
 
@@ -32,7 +36,7 @@ opts = list()
 
 # Minerva
 opts$data_dir = "~/links/STARNET/koples01/data"  # root of data directory
-opts$emat_file = "cross-tissue/gene_exp_norm_reshape/expr_recast.RData"
+opts$emat_file = "cross-tissue/gene_exp_norm_batch_imp/all.RData"
 
 
 opts$out_folder = "modules"  # output folder in data directory, WARNING: overwrites modules in this folder!
@@ -97,17 +101,27 @@ environment(TOMsimilarity) = asNamespace("WGCNA")  # attach function to namespac
 # Loads expr_recast data frame with tissue-specific expression
 load(file.path(opts$data_dir, opts$emat_file))
 
-# Get expression matrix from recasted data frame with all tissue 
-emat = expr_recast[, 3:ncol(expr_recast)]
-meta_genes = expr_recast[, 1:2]
-meta_genes = as.data.frame(meta_genes)
+if (exists("expr_recast")) {
+	# Table with both expression and meta data in first two columns
+	# Get expression matrix from recasted data frame with all tissue 
+	emat = expr_recast[, 3:ncol(expr_recast)]
+	meta_genes = expr_recast[, 1:2]
+	meta_genes = as.data.frame(meta_genes)
 
-meta_genes$gene_symbol = sapply(strsplit(as.character(meta_genes$transcript_id), "_"), function(x) x[1])
-meta_genes$ensembl = sapply(strsplit(as.character(meta_genes$transcript_id), "_"), function(x) x[2])
+	meta_genes$gene_symbol = sapply(strsplit(as.character(meta_genes$transcript_id), "_"), function(x) x[1])
+	meta_genes$ensembl = sapply(strsplit(as.character(meta_genes$transcript_id), "_"), function(x) x[2])
 
-# rownames(emat) = expr_recast$transcript_id
-colnames(emat) = colnames(expr_recast)[3:ncol(expr_recast)]
-patient_ids = colnames(emat)
+	# rownames(emat) = expr_recast$transcript_id
+	colnames(emat) = colnames(expr_recast)[3:ncol(expr_recast)]
+	patient_ids = colnames(emat)
+} else if (exists("mat") & exists("row_meta")) {
+	# Separate sata matrix and meta
+	emat = mat
+	meta_genes = row_meta
+	patient_idx = colnames(emat)
+} else {
+	stop("Invalid data format in provided R object")
+}
 
 # Missing data
 message("missing data fraction: ", sum(is.na(emat))/(nrow(emat) * ncol(emat)))

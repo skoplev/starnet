@@ -1,3 +1,5 @@
+#!/usr/bin/env Rscript
+
 # Detect modules using blockwise WGCNA and heterogenous beta values.
 
 rm(list=ls())
@@ -37,12 +39,12 @@ opts$beta_between = 2.7
 # methods: 
 #	single, uses a single beta value.
 #	between_within, uses two different beta values for within and between tissue.
-#	complete, uses a complete specification of beta  values.
+#	complete, uses a complete specification of beta values.
 # opts$method = "single"
 # opts$method = "between_within"
 opts$method = "complete"
 
-opts$max_block_size = 5000
+opts$max_block_size = 40000
 opts$min_module_size = 30
 
 # Test case samples a subset of the expression matrix
@@ -90,6 +92,9 @@ load(file.path(opts$data_dir, opts$emat_file))
 emat = expr_recast[, 3:ncol(expr_recast)]
 meta_genes = expr_recast[, 1:2]
 meta_genes = as.data.frame(meta_genes)
+
+meta_genes$gene_symbol = sapply(strsplit(as.character(meta_genes$transcript_id), "_"), function(x) x[1])
+meta_genes$ensembl = sapply(strsplit(as.character(meta_genes$transcript_id), "_"), function(x) x[2])
 
 # rownames(emat) = expr_recast$transcript_id
 colnames(emat) = colnames(expr_recast)[3:ncol(expr_recast)]

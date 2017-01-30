@@ -7,7 +7,6 @@ library(RColorBrewer)
 # heatmap.3
 source_url("https://raw.githubusercontent.com/obigriffith/biostar-tutorials/master/Heatmaps/heatmap.3.R")
 
-
 data_dir = "/Users/sk/DataProjects/cross-tissue"
 
 setwd("/Users/sk/Google Drive/projects/cross-tissue")
@@ -51,56 +50,63 @@ pheno_match = lapply(expr_mats_batch, function(mat) {
 })
 
 
-syntax_cor = lapply(1:length(expr_mats_batch), function(i) {
-	mat = expr_mats_batch[[i]]
-	mat = as.matrix(mat)
+# Test of phenotype correlations
 
-	# mat[mat < 0] = 0
+phenotypes = c("syntax_score", "LDL", "HDL")
 
-	# Match phenotype data to selected gene expression matrix
-	patient_ids = sapply(
-		strsplit(colnames(mat), "_"),
-		function(x) x[2]
-	)
+pheno_cor = list()
+for (phenotype in phenotypes) {
+	pheno_cor[[phenotype]] = lapply(1:length(expr_mats_batch), function(i) {
+		mat = expr_mats_batch[[i]]
+		mat = as.matrix(mat)
 
-	pheno_matched = pheno[match(patient_ids, pheno$starnet.ID), ]
+		# mat[mat < 0] = 0
 
-	# Correlation tests
-	cor_tests = lapply(1:nrow(mat), function(k) {
-		tryCatch({
-			cor_test = cor.test(mat[k,], pheno_matched$syntax_score, method="pearson")
-			return(cor_test)
-		}, error=function(e) {
-			# Null
-			cor_test = cor.test(c(0, 0, 0), c(0, 0, 0))
-			return(cor_test)
+		# Match phenotype data to selected gene expression matrix
+		patient_ids = sapply(
+			strsplit(colnames(mat), "_"),
+			function(x) x[2]
+		)
+
+		pheno_matched = pheno[match(patient_ids, pheno$starnet.ID), ]
+
+		# Correlation tests
+		cor_tests = lapply(1:nrow(mat), function(k) {
+			tryCatch({
+				cor_test = cor.test(mat[k,], pheno_matched[[phenotype]], method="pearson")
+				return(cor_test)
+			}, error=function(e) {
+				# Null
+				cor_test = cor.test(c(0, 0, 0), c(0, 0, 0))
+				return(cor_test)
+			})
 		})
+
+		cor_pvals = sapply(cor_tests, function(x) x$p.value)
+		cor_coef = sapply(cor_tests, function(x) x$estimate)
+
+		# qvalue, local correction for multiple hypothesis testing
+		cor_qvals = qvalue(p=cor_pvals)
+
+		tab = data.frame(
+			transcript_id=rownames(mat),
+			cor=cor_coef,
+			# cor_tests=cor_tests,
+			pval=cor_pvals,
+			qval=cor_qvals$lfdr
+		)
+		return(tab)
 	})
 
-	cor_pvals = sapply(cor_tests, function(x) x$p.value)
-	cor_coef = sapply(cor_tests, function(x) x$estimate)
+	names(pheno_cor[[phenotype]]) = names(expr_mats_batch)
 
-	# qvalue, local correction for multiple hypothesis testing
-	cor_qvals = qvalue(p=cor_pvals)
+	# Order correlation tables based on p-values
+	pheno_cor[[phenotype]] = lapply(pheno_cor[[phenotype]], function(x) {
+		x[order(x$pval), ]
+	})
+}
 
-	tab = data.frame(
-		transcript_id=rownames(mat),
-		cor=cor_coef,
-		# cor_tests=cor_tests,
-		pval=cor_pvals,
-		qval=cor_qvals$lfdr
-	)
-	return(tab)
-})
-
-names(syntax_cor) = names(expr_mats_batch)
-
-# Order correlation tables based on p-values
-syntax_cor = lapply(syntax_cor, function(x) {
-	x[order(x$pval), ]
-})
-
-save(syntax_cor, file=file.path(data_dir, "STARNET/pheno_cor/syntax_cor.RData"))
+save(pheno_cor, file=file.path(data_dir, "STARNET/pheno_cor/pheno_cor.RData"))
 
 
 # Correlations based on permutations

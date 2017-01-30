@@ -118,7 +118,7 @@ if (exists("expr_recast")) {
 	# Separate sata matrix and meta
 	emat = mat
 	meta_genes = row_meta
-	patient_idx = colnames(emat)
+	patient_ids = colnames(emat)
 } else {
 	stop("Invalid data format in provided R object")
 }

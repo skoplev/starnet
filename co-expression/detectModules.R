@@ -25,11 +25,19 @@ enableWGCNAThreads(nThreads=2)  # assuming 2 threads per core
 opts = list()
 
 # Files and folders
-opts$data_dir = "~/DataProjects/cross-tissue"  # root of data directory
-opts$project_root = "~/Google Drive/projects/cross-tissue"
 
-opts$emat_file = "STARNET/gene_exp_norm_reshape/expr_recast.RData"
-opts$beta_mat_file = "co-expression/determinePower/output/beta.csv"
+# # Local
+# opts$data_dir = "~/DataProjects/cross-tissue"  # root of data directory
+# opts$emat_file = "STARNET/gene_exp_norm_reshape/expr_recast.RData"
+
+# Minerva
+opts$data_dir = "~/links/STARNET/koples01/data"  # root of data directory
+opts$emat_file = "cross-tissue/gene_exp_norm_reshape/expr_recast.RData"
+
+
+opts$project_root = "../"  # relative path, for loading additional libraries
+opts$beta_mat_file = "determinePower/output/beta.csv"
+
 
 opts$beta = 3.0  # agerage from cross-tissue
 
@@ -54,7 +62,7 @@ opts$test = TRUE
 
 # Parse options
 # ------------------------------------------------
-setwd(opts$project_root)
+# setwd(opts$project_root)
 
 # Load optimal tissue-specific and between tissue beta values
 opts$beta_mat = read.table(opts$beta_mat_file, row.names=1, header=TRUE, sep=",")
@@ -78,7 +86,7 @@ if (opts$method == "between_within") {
 # to avoid overflow errors for inputs expression matrices with many genes.
 # line 738 (and other lines) changed to:
 # if (sum(as.numeric(modGenes)) - sum(as.numeric(reassign)) < minModuleSize) 
-source("lib/WGCNA/R/blockwiseModulesC.R")
+source(file.path(opts$project_root, "lib/WGCNA/R/blockwiseModulesC.R"))
 environment(blockwiseModules) = asNamespace("WGCNA")  # attach function to namespace
 environment(projectiveKMeans) = asNamespace("WGCNA")  # attach function to namespace
 environment(TOMsimilarity) = asNamespace("WGCNA")  # attach function to namespace
@@ -111,8 +119,8 @@ emat[is.na(emat)] = 0.0  # impute to average
 # Random sample of data, for running on subset of data.
 # For test purposes only.
 if (opts$test) {
-	# feature_idx = sample(1:ncol(emat), 1000)
-	feature_idx = sample(1:ncol(emat), 20000)
+	feature_idx = sample(1:ncol(emat), 1000)
+	# feature_idx = sample(1:ncol(emat), 20000)
 	emat = emat[, feature_idx]
 	meta_genes = meta_genes[feature_idx, ]
 }

@@ -35,6 +35,7 @@ opts$data_dir = "~/links/STARNET/koples01/data"  # root of data directory
 opts$emat_file = "cross-tissue/gene_exp_norm_reshape/expr_recast.RData"
 
 
+opts$out_folder = "modules"  # output folder in data directory, WARNING: overwrites modules in this folder!
 opts$project_root = "../"  # relative path, for loading additional libraries
 opts$beta_mat_file = "determinePower/output/beta.csv"
 
@@ -239,7 +240,7 @@ if (opts$method == "single") {
 dir.create(file.path(opts$data_dir, "modules"))
 
 # Store module data
-save(bwnet, meta_genes, patient_ids, opts, file=file.path(opts$data_dir, "modules", paste0(opts$method, "-cross-tissue.RData")))
+save(bwnet, meta_genes, patient_ids, opts, file=file.path(opts$data_dir, opts$out_folder, paste0(opts$method, "-cross-tissue.RData")))
 
 
 # # Load topological overlap matrix (TOM) into environment.

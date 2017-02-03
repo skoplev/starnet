@@ -5,12 +5,12 @@ module load rstudio
 
 mkdir logs
 
-bsub -J determinePower \
+bsub -J findModules \
 	-P acc_STARNET \
 	-q alloc \
-	-W 1:00 \
+	-W 48:00 \
 	-n 1 \
-	-R rusage[mem=8000] \
+	-R rusage[mem=100000] \
 	-e logs/error.%J \
 	-o logs/output.%J \
 	./detectModules.R

@@ -53,16 +53,16 @@ opts$beta_between = 2.7
 #	single, uses a single beta value.
 #	between_within, uses two different beta values for within and between tissue.
 #	complete, uses a complete specification of beta values.
-# opts$method = "single"
+opts$method = "single"
 # opts$method = "between_within"
-opts$method = "complete"
+# opts$method = "complete"
 
 opts$max_block_size = 40000
 opts$min_module_size = 30
 
 # Test case samples a subset of the expression matrix
-opts$test = TRUE
-# opts$test = FALSE
+# opts$test = TRUE
+opts$test = FALSE
 
 
 # Parse options
@@ -140,17 +140,17 @@ if (opts$test) {
 	meta_genes = meta_genes[feature_idx, ]
 }
 
-dir.create(file.path(opts$data_dir, "TOMs"))  # directory for TOM data
 
 if (opts$method == "single") {
 	# Blockwise modules with single beta value
+	dir.create(file.path(opts$data_dir, "TOMs"))  # directory for TOM data
 
 	bwnet = blockwiseModules(emat,
 		power=opts$beta,
 		randomSeed=42000,
 		maxBlockSize=opts$max_block_size,
 		nThreads=2,
-		saveTOMs=TRUE,
+		saveTOMs=FALSE,
 		saveTOMFileBase=file.path(opts$data_dir, "TOMs/TOM"),
 		verbose=2)
 } else if (opts$method == "between_within" | opts$method == "complete") {
@@ -199,7 +199,7 @@ if (opts$method == "single") {
 			}
 		}
 
-		# Topological overalp matrix
+		# Topological overalap matrix
 		# Overwrites for increased memory efficiency
 		netw_mat = 1 - TOMsimilarity(netw_mat)
 

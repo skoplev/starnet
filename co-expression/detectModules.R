@@ -36,7 +36,8 @@ opts = list()
 
 # Minerva
 opts$data_dir = "~/links/STARNET/koples01/data"  # root of data directory
-opts$emat_file = "cross-tissue/gene_exp_norm_batch_imp/all.RData"
+# opts$emat_file = "cross-tissue/gene_exp_norm_batch_imp/all.RData"
+opts$emat_file = "cross-tissue/gene_exp_norm_reshape/expr_recast.RData"
 
 
 opts$out_folder = "modules"  # output folder in data directory, WARNING: overwrites modules in this folder!
@@ -47,7 +48,7 @@ opts$beta_mat_file = "determinePower/output/beta.csv"
 opts$beta = 3.0  # agerage from cross-tissue
 
 opts$beta_within = 5.2
-opts$beta_between = 2.7
+ots$beta_between = 2.7
 
 # methods: 
 #	single, uses a single beta value.
@@ -75,6 +76,10 @@ opts$beta_mat = data.matrix(opts$beta_mat)
 
 if (!all(rownames(opts$beta_mat) == colnames(opts$beta_mat))) {
 	stop("Mismatch between rownames and column names of beta matrix.")
+}
+
+if (! nrow(opts$beta_mat) > 1) {
+	stop("Invalid beta matrix dimension.")
 }
 
 if (opts$method == "between_within") {

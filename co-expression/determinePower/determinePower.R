@@ -51,6 +51,14 @@ if (!exists("args")) {
 # Load reshaped gene expression matrix
 load(opts$emat_file, verbose=TRUE)
 
+# Convert table from reshape2
+if (exists("expr_recast")) {
+	mat = expr_recast[, 3:ncol(expr_recast)]
+	mat = data.matrix(mat)
+	row_meta = expr_recast[, 1:2]
+	row_meta = as.data.frame(row_meta)
+}
+
 # Check input
 if (!exists("mat")) {
 	stop("R object does not contain mat variable.")

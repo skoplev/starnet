@@ -13,4 +13,5 @@ bsub -J determinePower \
 	-R rusage[mem=40000] \
 	-e logs/error.%J \
 	-o logs/output.%J \
-	./determinePower.R /hpc/users/koples01/links/STARNET/koples01/data/cross-tissue/gene_exp_norm_batch_imp/all.RData
+	# ./determinePower.R /hpc/users/koples01/links/STARNET/koples01/data/cross-tissue/gene_exp_norm_batch_imp/all.RData
+	./determinePower.R /hpc/users/koples01/links/STARNET/koples01/data/cross-tissue/gene_exp_norm_reshape/expr_recast.RData

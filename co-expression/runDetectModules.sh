@@ -13,4 +13,7 @@ bsub -J findModules \
 	-R rusage[mem=100000] \
 	-e logs/error.%J \
 	-o logs/output.%J \
-	./detectModules.R
+	./detectModules.R between_within
+
+# 	./detectModules.R complete
+# 	./detectModules.R single

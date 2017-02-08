@@ -100,7 +100,8 @@ for (i in 1:length(unique(row_meta$tissue))) {
 
 	# Symmetric correlation matrix within-tissue
 	message("estimating correlation coefficients")
-	cmat = corFast(t(mat[row_meta$tissue == tissue, ]),
+	cmat = cor(t(mat[row_meta$tissue == tissue, ]),
+		use="pairwise.complete.obs",
 		nThreads=4  # parallel computation not working on OSX
 	)
 	gc()
@@ -163,9 +164,10 @@ for (i in 1:ncol(paired_tissue)) {
 	message("calculating cross-tissue correlation: ", paired_tissue[1, i], ", ", paired_tissue[2, i])
 
 	message("estimating correlation coefficients")
-	cmat = corFast(
+	cmat = cor(
 		t(mat[row_meta$tissue == paired_tissue[1, i], ]),
 		t(mat[row_meta$tissue == paired_tissue[2, i], ]),
+		use="pairwise.complete.obs",
 		nThreads=4
 	)
 	gc()  # garbage collection

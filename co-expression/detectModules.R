@@ -1,7 +1,15 @@
 #!/usr/bin/env Rscript
 
 # Detect modules using blockwise WGCNA and heterogenous beta values.
+# detectModules.R
 #
+# Method is passed as command line argument
+# methods: 
+#	single, uses a single beta value.
+#	between_within, uses two different beta values for within and between tissue.
+#	complete, uses a complete specification of beta values.
+#
+# Additional arguments can be set in the config section
 # Input file must be an R object containing either:
 #   - mat; matrix with data matrix, and row_meta; table with gene meta data.
 #   - expr_recast; data frame with reshaped data containing metadata in 2 first columns followed by gene expression matrix.
@@ -28,6 +36,22 @@ enableWGCNAThreads(nThreads=2)  # assuming 2 threads per core
 # --------------------------
 opts = list()
 
+# opts$method = "single"
+# opts$method = "between_within"
+# opts$method = "complete"
+
+
+args = commandArgs(trailingOnly=TRUE)  # R-style positional arguments
+if (length(args) != 1) {
+	stop("Invalid arguments. USAGE: detectModules.R <single/between_within/complete>")
+}
+if (!args[1] %in% c("single", "between_within", "complete")) {
+	stop("Invalid arguments. USAGE: detectModules.R <single/between_within/complete>")
+}
+
+opts$method = args[1]
+
+
 # Files and folders
 
 # # Local
@@ -45,18 +69,12 @@ opts$project_root = ".."  # relative path, for loading additional libraries
 opts$beta_mat_file = "determinePower/output/beta.csv"
 
 
+# Additional arguments
 opts$beta = 3.0  # agerage from cross-tissue
 
 opts$beta_within = 5.2
-ots$beta_between = 2.7
+opts$beta_between = 2.7
 
-# methods: 
-#	single, uses a single beta value.
-#	between_within, uses two different beta values for within and between tissue.
-#	complete, uses a complete specification of beta values.
-opts$method = "single"
-# opts$method = "between_within"
-# opts$method = "complete"
 
 opts$max_block_size = 40000
 opts$min_module_size = 30
@@ -290,4 +308,3 @@ save(bwnet, meta_genes, patient_ids, opts, file=file.path(opts$data_dir, opts$ou
 # 	xlab=expression("log"[10] * "k"),
 # 	ylab=expression("log"[10] * " p(k)"),
 # 	unlog="xy")
-

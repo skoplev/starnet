@@ -35,7 +35,8 @@ getOptimalBeta = function(con_eval, powers, beta_min=0.85, beta_frac=0.95, selBe
 
 # Load outout
 # load('~/DataProjects/cross-tissue/STARNET/determine_power/con_eval2.RData')
-load('~/DataProjects/cross-tissue/STARNET/determine_power/con_eval.RData')
+# load('~/DataProjects/cross-tissue/STARNET/determine_power/con_eval.RData')
+load('~/DataProjects/cross-tissue/STARNET/determine_power/con_eval_no_impute.RData')
 
 
 # Load tissue specification. Not strictly necesary
@@ -73,7 +74,8 @@ tissue_pairs = lapply(
 )
 
 
-pdf("plots/beta_series.pdf", height=9, width=5)
+# pdf("plots/beta_series.pdf", height=9, width=5)
+pdf("plots/beta_series_no_impute.pdf", height=9, width=5)
 par(mfrow=c(4, 2))
 for (i in 1:length(con_eval)) {
 	tissue = names(con_eval)[i]
@@ -148,7 +150,8 @@ beta_mat = data.matrix(beta_df[, 2:ncol(beta_df)])
 rownames(beta_mat) = beta_df[, 1]
 
 # Plot beta matrix as heatmap
-pdf("plots/betas.pdf", width=5, height=5)
+# pdf("plots/betas.pdf", width=5, height=5)
+pdf("plots/betas_no_impute.pdf", width=5, height=5)
 heatmap.2(beta_mat,
 	cellnote=beta_mat,
 	trace="none",

@@ -1,3 +1,6 @@
+# Analysis for basic distributions for the modules detected using 3 different
+# methods.
+#
 rm(list=ls())
 
 # Analysis of modules

@@ -110,6 +110,12 @@ meta_genes = as.data.frame(meta_genes)
 
 # tissue_transcript IDs
 meta_genes$id = paste(meta_genes$tissue, meta_genes$transcript_id, sep="_")
+meta_genes$ensembl = sapply(strsplit(as.character(meta_genes$transcript_id), "_"), function(x) x[2])
+
+# Counts of ensembl IDs
+length(unique(meta_genes$ensembl))
+length(unique(meta_genes$ensembl[meta_genes$tissue == "AOR"]))
+length(unique(meta_genes$ensembl[meta_genes$tissue == "MAM"]))
 
 rm(expr_recast)
 
@@ -135,7 +141,7 @@ idx_single = which(sing$meta_genes$tissue == "LIV" &
 sing$clust[idx_single]
 
 
-pdf("co-expression/plotsModuleStats/liver_module_match.pdf", width=3.0, height=6)
+pdf("co-expression/targetedModules/plotsModuleStats/liver_module_match.pdf", width=3.0, height=6)
 par(mfrow=c(3, 1))
 
 barplot(table(between_within$clust[idx_between]),
@@ -190,7 +196,7 @@ clust = as.integer(as.character(liver_modules_single$clust[1]))
 liver_module_single = sing$meta_genes[sing$clust == clust ,]
 
 
-pdf("co-expression/plotsModuleStats/liver_module_match_sel.pdf", width=3, height=4)
+pdf("co-expression/targetedModules/plotsModuleStats/liver_module_match_sel.pdf", width=3, height=4)
 bar_cols = c(gray.colors(3)[c(1, 1)], brewer.pal(9, "Set1")[5])
 barplot(
 	cbind(liverModuleOverlap(liver_module_between, liver_module),
@@ -229,7 +235,10 @@ intersect(g1, intersect(g2, g3))
 # Find modules associated with specific genes.
 #-----------------------------------------------------------------
 
-gene = "KIAA1462"  # gene to look up
+# gene = "KIAA1462"  # gene to look up
+# gene = "UBR4"
+gene = "U2AF2"
+
 
 # Returns list of transcripts in 
 findModule = function(mod_env, gene) {
@@ -246,7 +255,7 @@ findModule = function(mod_env, gene) {
 }
 
 # Create directory for selected gene
-sel_gene_dir = file.path("co-expression/plotsModuleSelected", gene)
+sel_gene_dir = file.path("co-expression/targetedModules/singleGene", gene)
 dir.create(sel_gene_dir)
 
 
@@ -315,7 +324,7 @@ for (mod_name in names(modules)) {
 
 # mod_name = 104
 # write.csv(modules[[which(names(modules) == mod_name)]],
-# 	file=paste0("co-expression/plotsModuleSelected/KIAA1462/module_complete_", mod_name, ".csv"),
+# 	file=paste0("co-expression/targetedModules/singleGene/KIAA1462/module_complete_", mod_name, ".csv"),
 # 	quote=FALSE)
 
 

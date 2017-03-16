@@ -60,10 +60,72 @@ mod_stats = list("Between-within"=bw_stats,
 	"Complete"=comp_stats,
 	"Single"=sing_stats)
 
+# Table of all modules
+# between_within$clust
+between_within_modules = between_within$meta_genes
+between_within_modules$clust = between_within$clust
+
+write.csv(between_within_modules, file="co-expression/moduleStats/between_within_modules.csv",
+	quote=FALSE,
+	row.names=FALSE
+)
+
+complete_modules = complete$meta_genes
+complete_modules$clust = complete$clust
+
+write.csv(complete_modules, file="co-expression/moduleStats/complete_modules.csv",
+	quote=FALSE,
+	row.names=FALSE
+)
+
+
+# Subsets of modules containing at least one MAM or AOR transcript
+# ---------------------------------
+# include_tissues = c("AOR", "MAM")
+
+# include_modules = apply(
+# 	bw_stats$tissue_counts[rownames(bw_stats$tissue_counts) %in% include_tissues, ] > 0,
+# 	2,
+# 	any
+# )
+# include_modules = which(include_modules)
+
+# between_within_modules_subset = between_within_modules[between_within_modules$clust %in% include_modules, ]
+
+# write.csv(between_within_modules_subset, file="co-expression/moduleStats/between_within_modules_AOR_MAM.csv",
+# 	quote=FALSE,
+# 	row.names=FALSE
+# )
+
+# include_modules = apply(
+# 	comp_stats$tissue_counts[rownames(comp_stats$tissue_counts) %in% include_tissues, ] > 0,
+# 	2,
+# 	any
+# )
+# include_modules = which(include_modules)
+
+# complete_modules_subset = complete_modules[complete_modules$clust %in% include_modules, ]
+
+# write.csv(complete_modules_subset, file="co-expression/moduleStats/complete_modules_AOR_MAM.csv",
+# 	quote=FALSE,
+# 	row.names=FALSE
+# )
+
+
+
+# table(between_within_modules$tissue[between_within_modules_subset$clust == 35])
+
+# colnames(bw_stats$tissue_counts)[include_modules]
+
+
+# mod_stats["Between-within"]
+
+
+
 cols = brewer.pal(9, "Set1")[c(1:5, 7:9)]
 
 
-pdf("co-expression/plotsModuleStats/module_size.pdf", width=4, height=5)
+pdf("co-expression/moduleStats/module_size.pdf", width=4, height=5)
 par(mfrow=c(3, 2))
 barplot(
 	log10(rev(sort(table(between_within$clust)))),
@@ -122,7 +184,7 @@ dev.off()
 
 # Plots counting number of cross tissue modules
 # ------------------------------------------------
-pdf("co-expression/plotsModuleStats/cross_tissue_module_counts.pdf", width=3, height=6)
+pdf("co-expression/moduleStats/cross_tissue_module_counts.pdf", width=3, height=6)
 cross_tissue_mod_05 = sapply(mod_stats, function(stat) {
 	sum(stat$purity < 0.95)
 })
@@ -139,7 +201,7 @@ dev.off()
 
 # Module counts based on purity
 # ------------------------------------
-pdf("co-expression/plotsModuleStats/cross_tissue_module_purity_size.pdf", width=4, height=4.5)
+pdf("co-expression/moduleStats/cross_tissue_module_purity_size.pdf", width=4, height=4.5)
 size_range = range(bw_stats$size, comp_stats$size, sing_stats$size)
 size_range = c(0, 2000)
 other_range = range(1 - bw_stats$purity, 1 - comp_stats$purity, 1 - sing_stats$purity)
@@ -210,7 +272,7 @@ simil_bw_sing = moduleSimil(between_within, sing)
 simil_sing_comp = moduleSimil(sing, complete)
 
 
-pdf("co-expression/plotsModuleStats/best_module_match.pdf", width=5, height=6)
+pdf("co-expression/moduleStats/best_module_match.pdf", width=5, height=6)
 par(mfrow=c(3, 2))
 plot(density(apply(simil_bw_comp, 1, max)),
 	lwd=2.0,
@@ -293,7 +355,7 @@ sing_module_cols = colorByPurity(sing_stats$tissue_counts, cols)
 
 
 
-pdf("co-expression/plotsModuleStats/jaccard_bw_comp.pdf", width=10, height=10)
+pdf("co-expression/moduleStats/jaccard_bw_comp.pdf", width=10, height=10)
 heatmap.3(simil_bw_comp,
 	trace="none",
 	ColSideColors=t(comp_module_cols),
@@ -309,7 +371,7 @@ heatmap.3(simil_bw_comp,
 	)
 dev.off()
 
-pdf("co-expression/plotsModuleStats/jaccard_bw_sing.pdf", width=10, height=10)
+pdf("co-expression/moduleStats/jaccard_bw_sing.pdf", width=10, height=10)
 heatmap.3(simil_bw_sing,
 	trace="none",
 	ColSideColors=t(sing_module_cols),
@@ -325,7 +387,7 @@ heatmap.3(simil_bw_sing,
 )
 dev.off()
 
-pdf("co-expression/plotsModuleStats/jaccard_sing_comp.pdf", width=10, height=10)
+pdf("co-expression/moduleStats/jaccard_sing_comp.pdf", width=10, height=10)
 heatmap.3(simil_sing_comp,
 	trace="none",
 	ColSideColors=t(comp_module_cols),

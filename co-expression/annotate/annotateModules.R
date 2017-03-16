@@ -2,6 +2,8 @@ rm(list=ls())
 
 library(RColorBrewer)
 library(gplots)
+library(qvalue)
+library(data.table)
 
 library(devtools)  # for installing heatmap.3
 # Load heatmap.3
@@ -15,6 +17,7 @@ setwd("/Users/sk/Google Drive/projects/cross-tissue")
 
 source("src/models/regr.R")  # regression models
 source("src/models/cor.R")
+source("src/models/enrichment.R")
 
 # Parses transcript ids from meta_genes table.
 # Changes ensembl and gene_symbol column if input data frame and returns new data frame.
@@ -58,26 +61,6 @@ parseModuleData = function(mod_env)  {
 	return(mod_env)
 }
 
-enrichmentGO = function(modules) {
-	# Map ensembl IDs
-	ensembl = sapply(strsplit(modules$meta_genes$ensembl, "[.]"), function(x) x[1])
-
-	# Load map of Ensembl -> ENTREX IDs
-	entrez_map = select(org.Hs.eg.db, ensembl, "ENTREZID", "ENSEMBL")
-
-	entrez = entrez_map$ENTREZID[match(ensembl, entrez_map$ENSEMBL)]
-
-	go_enrich = GOenrichmentAnalysis(between$clust,
-		entrez,
-		# between$meta_genes$ensembl_nosuf,
-		organism="human",
-		removeDuplicates=FALSE,
-		nBestP=50,
-		# pCut=0.05  # doesn't work
-	)
-
-	return(go_enrich)
-}
 
 countModuleTissueStat = function(modules) {
 
@@ -147,15 +130,7 @@ patient_ids = between$patient_ids
 pheno_matched = pheno[match(patient_ids, pheno$starnet.ID), ]
 brainshake_matched = brainshake[match(patient_ids, brainshake$id), ]
 
-
-# between_fits_pheno = fitLinearEigenPheno(pheno_matched, between$bwnet$eigengenes)
-# between_fits_pheno[["syntax_score"]]
-# between_fits_pheno[["LDL"]]
-# summary(between_fits_pheno[["syntax_score"]])
-
-
-
-
+# Correlation test with selected phenotype data
 phenotypes = c("syntax_score", "ndv", "lesions", "DUKE", "BMI", "HbA1c", "LDL", "HDL", "CRP", "p_chol", "bl.glucose")
 between_pheno_cor = phenoCorTest(
 	mat=between$bwnet$eigengenes,
@@ -164,126 +139,37 @@ between_pheno_cor = phenoCorTest(
 	phenotypes=phenotypes
 )
 
-# pheno_cor[[phenotype]] = tab[order(tab$pval), ]
+# pmat = sapply(between_pheno_cor, function(x) x$pval)
+# rownames(pmat) = 1:nrow(pmat)
 
-# qmat = sapply(between_pheno_cor, function(x) x$qval)
+# # Nominally significant modules
+# sig_mods = apply(pmat, 1, min) < 0.05
 
+# pmat = pmat[sig_mods, ]
 
-# points(rep(1, sum(sig_mods)), between_stats$purity[sig_mods], pch=16)
-# points(rep(2, sum(!sig_mods)), between_stats$purity[!sig_mods], pch=16)
-# 	# between_stats$purity[!sig_mods])
-
-# t.test(between_stats$purity[sig_mods], between_stats$purity[!sig_mods])
-
-# ks.test(between_stats$purity[sig_mods], between_stats$purity[!sig_mods])
-# wilcox.test(between_stats$purity[sig_mods], between_stats$purity[!sig_mods])
-# wilcox.test(between_stats$purity[sig_mods], between_stats$purity[!sig_mods])
-# # kruskal.test(between_stats$purity[sig_mods], between_stats$purity[!sig_mods])
-
-
-
-
-# boxplot(-log10(between_stats$purity[sig_mods]), -log10(between_stats$purity[!sig_mods]))
-
-# wilcox.test(between_stats$purity[sig_mods], between_stats$purity[!sig_mods])
-# t.test(-log10(between_stats$purity[sig_mods]), -log10(between_stats$purity[!sig_mods]))
-# # ks.test(between_stats$purity[sig_mods], between_stats$purity[!sig_mods])
-
-# boxplot(between_stats$purity[sig_mods], between_stats$purity[!sig_mods])
-
-# boxplot(between_stats$n_tissues[sig_mods], between_stats$n_tissues[!sig_mods])
-
-# boxplot(between_stats$purity[sig_mods & between_stats$size < 2000], between_stats$purity[!sig_mods & between_stats$size < 2000])
-# t.test(between_stats$purity[sig_mods & between_stats$size < 2000], between_stats$purity[!sig_mods & between_stats$size < 2000])
-
-# barplot(
-# 	c(mean(between_stats$purity[sig_mods]),
-# 		mean(between_stats$purity[!sig_mods]))
+# hmap = heatmap.2(-log10(pmat), trace="none",
+# 	cexRow=1.2,
+# 	# cexCol=0.8,
+# 	key.title="",
+# 	key.xlab=expression("-log"[10] * " p"),
+# 	margins=c(10, 8),
+# 	col=colorRampPalette(brewer.pal(9, "YlGnBu"))(100)
 # )
 
-
-
-# heatmap.2(log10(t(tissue_counts) + 1),
-# 	col=colorRampPalette(brewer.pal(9, "Blues"))(100),
-# 	trace="none")
-
-# col=rep("black", length(sig_mods))
-# col[sig_mods] = "red"
-# plot(log10(between_stats$size), between_stats$purity, col=col, pch=16)
-
-
-between_pheno_cor = lapply(between_pheno_cor, function(tab) {
-	tab[order(tab$pval), ]
-})
-
-
-between_pheno_cor[["syntax_score"]]
-between_pheno_cor[["lesions"]]
-between_pheno_cor[["DUKE"]]
-between_pheno_cor[["ndv"]]
-
-between_pheno_cor[["LDL"]]
-between_pheno_cor[["Age"]]
-between_pheno_cor[["bl.glucose"]]
-between_pheno_cor[["HbA1c"]]
-between_pheno_cor[["CRP"]]
-between_pheno_cor[["Age"]]
-between_pheno_cor[["p_chol"]]
-between_pheno_cor[["SBP"]]
-# between_pheno_cor[["TG"]]
-
-
-# i = 45
-# i = 98
-# i = 120
-# i = 115
-# i = 186
-# i = 104
-
-# i = 20
+# between_pheno_cor = lapply(between_pheno_cor, function(tab) {
+# 	tab[order(tab$pval), ]
+# })
 
 i = 150
 plot(between$bwnet$eigengenes[, i], pheno_matched$DUKE)
 # cor.test(between$bwnet$eigengenes[, i], pheno_matched$syntax_score)
 
-# i = 78
-i = 220
-plot(between$bwnet$eigengenes[, i], pheno_matched$lesions)
 
 
-# i = 194
-# plot(between$bwnet$eigengenes[, i], pheno_matched$ndv)
-
-
-
-i = 98
-plot(between$bwnet$eigengenes[, i], pheno_matched$syntax_score)
-
-cor.test(between$bwnet$eigengenes[, i], pheno_matched$syntax_score)
-
-
-
-# Remove GO terms that are prevalent across modules
-removePrevalentTerms = function(enrich_tab, max_preval) {
-	mod_counts = table(enrich_tab$termID)
-	include_idx = mod_counts < max_preval
-	message("Excluding GO terms: ", sum(!include_idx))
-	include_terms = names(which(include_idx))
-	return(enrich_tab[enrich_tab$termID %in% include_terms, ])
-}
-
-# Filter out GO terms from WGCNA GO enrichment analysis
-filterCommonGOTerms = function(go, max_preval=50) {
-	go$bestPTerms$BP$enrichment = removePrevalentTerms(go$bestPTerms$BP$enrichment, max_preval)
-	go$bestPTerms$CC$enrichment = removePrevalentTerms(go$bestPTerms$CC$enrichment, max_preval)
-	go$bestPTerms$MF$enrichment = removePrevalentTerms(go$bestPTerms$MF$enrichment, max_preval)
-	return(go)
-}
-
-
+# GO enrichment of modules
+# ---------------------------------------------
 between_go_enrich = enrichmentGO(between)
 complete_go_enrich = enrichmentGO(complete)
-
 
 between_go_enrich_filter = filterCommonGOTerms(between_go_enrich, 50)
 complete_go_enrich_filter = filterCommonGOTerms(complete_go_enrich, 50)

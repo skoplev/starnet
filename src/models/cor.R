@@ -1,4 +1,6 @@
-# Correlations between
+# Correlations between matched phenotypes and 
+# mat: matrix with features in columns, such as eigengenes or 
+# Returns a table of selected statistics from cor.test
 phenoCorTest = function(mat, pheno_matched, phenotypes) {
 	pheno_cor = list()
 	for (phenotype in phenotypes) {

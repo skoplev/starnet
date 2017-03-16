@@ -2,6 +2,9 @@ rm(list=ls())
 
 library(RColorBrewer)
 library(gplots)
+library(qvalue)
+library(data.table)
+
 
 library(devtools)  # for installing heatmap.3
 # Load heatmap.3
@@ -24,7 +27,6 @@ between = new.env()
 load(file.path(data_dir, "modules/between_within-cross-tissue.RData"),
 	between,
 	verbose=TRUE)
-
 
 complete = new.env()
 load(file.path(data_dir, "modules/complete-cross-tissue.RData"),
@@ -64,7 +66,6 @@ patient_ids = between$patient_ids
 # Match phenotype data tables to
 pheno_matched = pheno[match(patient_ids, pheno$starnet.ID), ]
 brainshake_matched = brainshake[match(patient_ids, brainshake$id), ]
-
 
 
 # Test eigengene correlations with angio indicators

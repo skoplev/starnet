@@ -15,27 +15,31 @@ setwd("/Users/sk/Google Drive/projects/cross-tissue")
 source("src/base.R")
 
 # Load gwnet and row_meta tables
-load(file.path(data_dir, "modules/cross-tissue.RData"))
+# load(file.path(data_dir, "modules/cross-tissue.RData"))
+
+load(file.path(data_dir, "modules/between_within-cross-tissue.RData"), verbose=TRUE)
 
 # tissue_col = brewer.pal(12, "Set3")
-tissue_col = brewer.pal(9, "Pastel1")
-# tissue_col = brewer.pal(9, "Set1")
+# tissue_col = brewer.pal(9, "Pastel1")
+tissue_col = brewer.pal(9, "Set1")[-6]
 
 modules = as.integer(factor(bwnet$colors))  # the modules detected
 
 
 # Calculate module frequency statistics
 # Gene block tissue composition
-block_tissue_comp = lapply(bwnet$blockGenes, function(idx) {
-	# tissue2 = row_meta$tissue[idx]
+# block_tissue_comp = lapply(bwnet$blockGenes, function(idx) {
+block_tissue_comp = lapply(unique(bwnet$gene_blocks), function(block_id) {
+	idx = bwnet$gene_blocks == block_id
+	# tissue2 = meta_genes$tissue[idx]
 	# return(table(tissue2))
-	return(table(row_meta$tissue[idx]))
+	return(table(meta_genes$tissue[idx]))
 })
 
 module_tissue_comp = lapply(1:length(unique(modules)), function(i) {
-	# tissue = row_meta$tissue[modules == i]
+	# tissue = meta_genes$tissue[modules == i]
 	# return(table(tissue))
-	return(table(row_meta$tissue[modules == i]))
+	return(table(meta_genes$tissue[modules == i]))
 })
 
 block_tissue = countMat(block_tissue_comp)
@@ -59,18 +63,24 @@ min_entro = 0.1
 exclude = module_size > 5000
 sel_modules = tissue_entropy > min_entro & !exclude
 
+sum(tissue_entropy > min_entro)
+
 # Hierarcical cluster of tissue frequencies for all modules
 # Used to organize barplots
 hc_sel = hclust(dist(t(module_tissue_freq[,sel_modules])))
 
 
-svg("plots/cross-tissue-overview.svg")
+# svg("co-expression/plots/cross-tissue-overview2.svg")
+pdf("co-expression/plots/cross-tissue-overview2.pdf")
 par(mfcol=c(2, 2), lwd=1.0)
-plot(density(tissue_entropy), main="Module tissue entropy")  # not used
+# plot(density(tissue_entropy), main="Module tissue entropy")  # not used
+plot(density(tissue_entropy), xlim=c(0, 1), main="Module tissue entropy")  # not used
+
+abline(v=min_entro, col="grey", lty=3)
 
 # WCGNA block tissue composition
 barplot(block_tissue, col=tissue_col,
-	main="K-means partitioned WCGNA", ylab="Genes", xlab="Blocks")
+	main="K-means partitioned WGCNA", ylab="Genes", xlab="Blocks")
 # legend("topright", legend=rownames(block_tissue), pch=15, col=tissue_col)
 
 
@@ -95,8 +105,9 @@ cross_tissue_modules = cross_tissue_modules[, hc_sel$order]  # rerder based on h
 # par(lwd=0.4)
 barplot(cross_tissue_modules,
 	col=tissue_col,
+	main=paste0("Cross-tissue modules, n=", sum(sel_modules)),
 	ylab="Genes",
-	xlab="Cross-tissue modules",
+	xlab="By tissue composition",
 	border=NA, space=0
 )
 legend("topright", legend=rownames(block_tissue),

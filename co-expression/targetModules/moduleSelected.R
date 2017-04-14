@@ -61,6 +61,20 @@ liverModuleOverlap = function(module, liver_module) {
 }
 
 
+# Returns list of transcripts in 
+findModule = function(mod_env, gene) {
+	module_ids = mod_env$clust[
+		which(mod_env$meta_genes$gene_symbol == gene)]
+
+	modules = lapply(module_ids, function(id) {
+		mod_env$meta_genes[mod_env$clust == id, ]
+	})
+
+	names(modules) = module_ids
+
+	return(modules)
+}
+
 
 between_within = new.env()
 load(file.path(data_dir, "modules/between_within-cross-tissue.RData"),
@@ -235,27 +249,14 @@ intersect(g1, intersect(g2, g3))
 # Find modules associated with specific genes.
 #-----------------------------------------------------------------
 
-# gene = "KIAA1462"  # gene to look up
+gene = "KIAA1462"  # gene to look up
 # gene = "UBR4"
-gene = "U2AF2"
+# gene = "U2AF2"
 
 
-# Returns list of transcripts in 
-findModule = function(mod_env, gene) {
-	module_ids = mod_env$clust[
-		which(mod_env$meta_genes$gene_symbol == gene)]
-
-	modules = lapply(module_ids, function(id) {
-		mod_env$meta_genes[mod_env$clust == id, ]
-	})
-
-	names(modules) = module_ids
-
-	return(modules)
-}
 
 # Create directory for selected gene
-sel_gene_dir = file.path("co-expression/targetedModules/singleGene", gene)
+sel_gene_dir = file.path("co-expression/targetModules/singleGene", gene)
 dir.create(sel_gene_dir)
 
 
@@ -307,6 +308,18 @@ for (mod_name in names(modules)) {
 		row.names=FALSE,
 		quote=FALSE)
 }
+
+dir.create(file.path(module_dir, "module_genes"))
+for (mod_name in names(modules)) {
+	write.table(modules[[which(names(modules) == mod_name)]]$gene_symbol,
+		file=file.path(module_dir, "module_genes", paste0("module_", mod_name, ".csv")),
+		row.names=FALSE,
+		col.names=FALSE,
+		quote=FALSE)
+}
+
+
+# Write gene symbols
 
 
 
@@ -374,12 +387,12 @@ learnBayesNets = function(modules, meta_genes, emat) {
 modules = findModule(between_within, gene)
 module_dir = file.path(sel_gene_dir, "between_within")  # root module method dir
 
-modules = findModule(complete, gene)
-module_dir = file.path(sel_gene_dir, "complete")  # root module method dir
+# modules = findModule(complete, gene)
+# module_dir = file.path(sel_gene_dir, "complete")  # root module method dir
 
 # Exclude modules with too many genes
 modules = modules[
-	sapply(modules, function(mod) nrow(mod)) < 2000
+	sapply(modules, function(mod) nrow(mod)) < 3000
 ]
 
 # lapply(modules, dim)
@@ -464,14 +477,16 @@ kda_results$tissue = sapply(strsplit(as.character(kda_results$NODE), "_"), funct
 
 # Selective plot of key drivers
 # -----------------------------------------------
-kda_sel = kda_results[kda_results$MODULE == 155, ]
+# kda_sel = kda_results[kda_results$MODULE == 155, ]
+kda_sel = kda_results[kda_results$MODULE == 82, ]
 
 kda_sel = kda_sel[kda_sel$FDR < 0.05, ]
 
 write.table(kda_sel$gene_symbol,
-	file=file.path(module_dir, "kda", "mod_155_genes.txt"),
-	quote=FALSE, row.names=FALSE
+	file=file.path(module_dir, "kda", "mod_82_genes.txt"),
+	quote=FALSE, row.names=FALSE, col.names=FALSE
 )
+
 
 
 

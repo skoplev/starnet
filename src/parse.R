@@ -103,3 +103,30 @@ loadNormData = function(data_dir, min_sd=0, exclude_files) {
 
 	return(expr_recast)
 }
+
+# Parses transcript ids from meta_genes table.
+# Changes ensembl and gene_symbol column if input data frame and returns new data frame.
+# Supports gene symbols with "_".
+parseTranscriptId = function(meta_genes) {
+	# Get ensembl IDs as last "_" separated string
+	meta_genes$ensembl = sapply(
+		strsplit(as.character(meta_genes$transcript_id), "_"),
+		function(x) {
+			x[length(x)]  # last element
+	})
+
+	meta_genes$gene_symbol = sapply(
+		strsplit(as.character(meta_genes$transcript_id), "_"),
+		function(x) {
+			if (length(x) == 2) {
+				# Gene symbols does not contain "_"
+				return(x[1])
+			} else {
+				# Gene symbol contains "_"
+				gene_symbol = paste(x[-length(x)], collapse="_")  # not last element
+				# message(gene_symbol)
+				return(gene_symbol)
+			}
+	})
+	return(meta_genes)
+}

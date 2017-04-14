@@ -4,6 +4,7 @@ library(RColorBrewer)
 library(gplots)
 library(qvalue)
 library(data.table)
+library(psych)
 
 library(devtools)  # for installing heatmap.3
 # Load heatmap.3
@@ -18,33 +19,8 @@ setwd("/Users/sk/Google Drive/projects/cross-tissue")
 source("src/models/regr.R")  # regression models
 source("src/models/cor.R")
 source("src/models/enrichment.R")
+source("src/parse.R")
 
-# Parses transcript ids from meta_genes table.
-# Changes ensembl and gene_symbol column if input data frame and returns new data frame.
-# Supports gene symbols with "_".
-parseTranscriptId = function(meta_genes) {
-	# Get ensembl IDs as last "_" separated string
-	meta_genes$ensembl = sapply(
-		strsplit(as.character(meta_genes$transcript_id), "_"),
-		function(x) {
-			x[length(x)]  # last element
-	})
-
-	meta_genes$gene_symbol = sapply(
-		strsplit(as.character(meta_genes$transcript_id), "_"),
-		function(x) {
-			if (length(x) == 2) {
-				# Gene symbols does not contain "_"
-				return(x[1])
-			} else {
-				# Gene symbol contains "_"
-				gene_symbol = paste(x[-length(x)], collapse="_")  # not last element
-				# message(gene_symbol)
-				return(gene_symbol)
-			}
-	})
-	return(meta_genes)
-}
 
 # Parses module data
 parseModuleData = function(mod_env)  {
@@ -57,6 +33,8 @@ parseModuleData = function(mod_env)  {
 	eigen_gene_n = match(eigen_gene_names, levels(factor(mod_env$bwnet$colors)))
 
 	colnames(mod_env$bwnet$eigengenes) = eigen_gene_n
+
+	mod_env$bwnet$eigengenes = mod_env$bwnet$eigengenes[, order(eigen_gene_n)]
 
 	return(mod_env)
 }
@@ -130,7 +108,9 @@ patient_ids = between$patient_ids
 pheno_matched = pheno[match(patient_ids, pheno$starnet.ID), ]
 brainshake_matched = brainshake[match(patient_ids, brainshake$id), ]
 
+
 # Correlation test with selected phenotype data
+# -----------------------------------------------------
 phenotypes = c("syntax_score", "ndv", "lesions", "DUKE", "BMI", "HbA1c", "LDL", "HDL", "CRP", "p_chol", "bl.glucose")
 between_pheno_cor = phenoCorTest(
 	mat=between$bwnet$eigengenes,
@@ -139,8 +119,12 @@ between_pheno_cor = phenoCorTest(
 	phenotypes=phenotypes
 )
 
-# pmat = sapply(between_pheno_cor, function(x) x$pval)
-# rownames(pmat) = 1:nrow(pmat)
+# Combining p-values into matrix
+pheno_cor_pmat = sapply(between_pheno_cor, function(x) x$pval)
+rownames(pheno_cor_pmat) = colnames(between$bwnet$eigengenes)
+colnames(pheno_cor_pmat) = paste0("pval_", colnames(pheno_cor_pmat))
+
+
 
 # # Nominally significant modules
 # sig_mods = apply(pmat, 1, min) < 0.05
@@ -160,10 +144,11 @@ between_pheno_cor = phenoCorTest(
 # 	tab[order(tab$pval), ]
 # })
 
-i = 150
-plot(between$bwnet$eigengenes[, i], pheno_matched$DUKE)
-# cor.test(between$bwnet$eigengenes[, i], pheno_matched$syntax_score)
+# i = 150
+# i = 166
+# plot(between$bwnet$eigengenes[, i], pheno_matched$DUKE)
 
+# cor.test(between$bwnet$eigengenes[, i], pheno_matched$syntax_score)
 
 
 # GO enrichment of modules
@@ -174,42 +159,416 @@ complete_go_enrich = enrichmentGO(complete)
 between_go_enrich_filter = filterCommonGOTerms(between_go_enrich, 50)
 complete_go_enrich_filter = filterCommonGOTerms(complete_go_enrich, 50)
 
+
+top_go_terms_bp = sapply(1:max(between$clust), function(k) {
+	enrichment = between_go_enrich_filter$bestPTerms$BP$enrichment
+	idx = enrichment$module == k
+	top_terms = enrichment$termName[idx][1:5]
+	top_terms = top_terms[!is.na(top_terms)]
+	return(top_terms)
+})
+
+top_go_terms_cc = sapply(1:max(between$clust), function(k) {
+	enrichment = between_go_enrich_filter$bestPTerms$CC$enrichment
+	idx = enrichment$module == k
+	top_terms = enrichment$termName[idx][1:5]
+	top_terms = top_terms[!is.na(top_terms)]
+	return(top_terms)
+})
+
+
+
+# between_go_enrich$bestPTerms$BP$enrichment
+go_tab = data.frame(
+	top_go_bp=sapply(top_go_terms_bp, paste, collapse=";"),
+	top_go_cc=sapply(top_go_terms_cc, paste, collapse=";")
+)
+
 # range(between_go_enrich$bestPTerms$BP$enrichment$enrichmentP)
 
-head(between_go_enrich$bestPTerms$BP$enrichment)
 # head(between_go_enrich$bestPTerms$BP$enrichment)
-head(between_go_enrich$bestPTerms$BP$enrichment, 30)
+# # head(between_go_enrich$bestPTerms$BP$enrichment)
+# head(between_go_enrich$bestPTerms$BP$enrichment, 30)
 
-i = 98  # Ariella's liver module
-# i = 2
-# i = 155
-# i = 82
-# i = 20
-# i = 35
-# i = 37
-# i = 121
-# i = 127
-# i = 136
-# i = 112
-# i = 189
-i = 78
-i = 218
-i = 64
-idx = between_go_enrich_filter$bestPTerms$BP$enrichment$module == i
-between_go_enrich_filter$bestPTerms$BP$enrichment[idx, ]
+# i = 98  # Ariella's liver module
+# # i = 2
+# # i = 155
+# # i = 82
+# # i = 20
+# # i = 35
+# # i = 37
+# # i = 121
+# # i = 127
+# # i = 136
+# # i = 112
+# # i = 189
+# i = 78
+# i = 218
+# i = 64
+# idx = between_go_enrich_filter$bestPTerms$BP$enrichment$module == i
+# between_go_enrich_filter$bestPTerms$BP$enrichment[idx, ]
 
-term_name = "immune response"
-term_name = "lipid metabolic process"
-idx = between_go_enrich_filter$bestPTerms$BP$enrichment$termName == term_name
-between_go_enrich_filter$bestPTerms$BP$enrichment[idx, ]
-
-
-# head(between_go_enrich$bestPTerms$BP$enrichment$termName, 100)
+# term_name = "immune response"
+# term_name = "lipid metabolic process"
+# idx = between_go_enrich_filter$bestPTerms$BP$enrichment$termName == term_name
+# between_go_enrich_filter$bestPTerms$BP$enrichment[idx, ]
 
 
-sort(table(between_go_enrich$bestPTerms$BP$enrichment$termID))
-barplot(sort(table(between_go_enrich$bestPTerms$BP$enrichment$termName)))
+# # head(between_go_enrich$bestPTerms$BP$enrichment$termName, 100)
+
+
+# sort(table(between_go_enrich$0bestPTerms$BP$enrichment$termID))
+# barplot(sort(table(between_go_enrich$bestPTerms$BP$enrichment$termName)))
 
 # head(go_enrich$bestPTerms$BP$enrichment)
 # head(go_enrich$bestPTerms$MF$enrichment)
 # head(go_enrich$bestPTerms$CC$enrichment)
+
+
+
+# Find CAD-associated genes in cross-tissue modules
+# -----------------------------------------------------
+
+# Load Deloukas (2013) genes associated with CAD
+delou = read.table(file.path(data_dir, "Deloukas/ng.csv"),
+	skip=1,
+	sep=",",
+	header=TRUE)
+
+# Get CAD gene symbols from proximal loci
+cad_genes = delou$Loci_Nearest_Transcript
+cad_genes = paste(cad_genes, collapse="/")
+cad_genes = strsplit(cad_genes, "/")[[1]]
+cad_genes = unique(cad_genes)
+
+between$clust
+between$meta_genes
+
+cad_gene_bool = between$meta_genes$gene_symbol %in% cad_genes
+sum(cad_gene_bool)
+# sum(between$meta_genes$gene_symbol %in% cad_genes)
+# sum(between$meta_genes$gene_symbol %in% cad_genes)
+
+# Aggregate CAD gene symbols by module
+cad_genes_module = sapply(1:max(between$clust), function(k) {
+	idx = between$clust == k & cad_gene_bool
+
+	if (sum(idx) == 0) {
+		return(c())
+	} else {
+		return(between$meta_genes[idx, ])
+	}
+})
+
+# Count number of found CAD-associated genes
+cad_tab = data.frame(n_cad_genes=sapply(cad_genes_module, function(df) max(0, nrow(df))))
+cad_tab$cad_genes = sapply(cad_genes_module, function(df) paste(df$gene_symbol, collapse=";"))
+
+# Hypergeometric test of CAD-associated transcripts in each module
+m_cad_mRNA = sum(between$meta_genes$gene_symbol %in% cad_genes)
+n_non_cad_mRNA = sum(! between$meta_genes$gene_symbol %in% cad_genes)
+
+p_cad_hyper = sapply(1:max(between$clust), function(k) {
+	module_size = between_stats$size[k]
+	cad_module_mRNA = max(0, nrow(cad_genes_module[[k]]))
+
+	p = 1 - phyper(cad_module_mRNA, m_cad_mRNA, n_non_cad_mRNA, module_size)
+	return(p)
+})
+
+cad_tab$cad_pval = p_cad_hyper
+cad_tab$cad_qvalue = qvalue(cad_tab$cad_pval)$qvalue
+
+
+# CIBERSORT frequencies, association with eigengenes
+# ---------------------------------------------------------------
+# Load all files
+freq_files = list.files(file.path(data_dir, "CIBERSORT/out_freq"))
+
+exclude_freq_files = c(
+	"exp.GRCh38.GENCODE_r24.COR.mat.tsv",
+	"exp.GRCh38.GENCODE_r24.FOC.mat.tsv",
+	"exp.GRCh38.GENCODE_r24.MAC.mat.tsv")
+
+freq_files = freq_files[!freq_files %in% exclude_freq_files]
+
+# Parse files returning only matrices
+ciber_freq = lapply(freq_files, function(file_name) {
+	file_path = file.path(data_dir, "CIBERSORT/out_freq", file_name)
+
+	tissue = strsplit(file_name, "[.]")[[1]][4]
+
+	# Load CIBERSORT data
+	freq = fread(file_path)
+
+	# Parse header separately
+	header = read.table(file_path, nrows=1, sep="\t")
+
+	header = unlist(lapply(header, as.character))
+	header = c("sample", header)
+
+	# header
+	colnames(freq) = header
+
+	# Only numerical fraction entries
+	freq_mat = freq[, 2:(ncol(freq) - 3)]
+	freq_mat = data.matrix(freq_mat)
+
+	rownames(freq_mat) = freq$sample
+	colnames(freq_mat) = paste(tissue, colnames(freq_mat), sep=":")
+
+	return(freq_mat)
+})
+
+# Align CIBERSORT frequency data to patient_ids
+ciber_freq = lapply(ciber_freq, function(freq_mat) {
+
+	idx = match(
+		patient_ids,
+		sapply(strsplit(rownames(freq_mat), "_"), function(x) x[2])
+		)
+
+	freq_mat = freq_mat[idx, ]
+
+	return(freq_mat)
+})
+
+# Test if all rownames agrees with patient IDs (patient_ids), throws error if not.
+void = sapply(ciber_freq, function(freq_mat) {
+	freq_ids = sapply(strsplit(rownames(freq_mat), "_"), function(x) x[2])
+	if(!all(freq_ids == patient_ids, na.rm=TRUE)) {
+		stop("Patient ID mismatch")
+	}
+})
+
+# Combine frequencies across tissue into single matrix
+ciber_freq_mat = Reduce(cbind, ciber_freq)
+rownames(ciber_freq_mat) = patient_ids
+
+# Remove low variance CIBERSORT features
+freq_sd = apply(ciber_freq_mat, 2, sd, na.rm=TRUE)
+
+ciber_freq_mat = ciber_freq_mat[, freq_sd > 1e-9]
+
+between_ciber_cor = phenoCorTest(
+	mat=between$bwnet$eigengenes,
+	as.data.frame(ciber_freq_mat)
+)
+
+ciber_cor_pmat = sapply(between_ciber_cor, function(x) x$pval)
+
+rownames(ciber_cor_pmat) = colnames(between$bwnet$eigengenes)
+
+
+# colnames(pheno_cor_pmat) = paste0("pval_", colnames(pheno_cor_pmat))
+
+ciber_cor_qval = qvalue(ciber_cor_pmat)$qvalue
+
+
+sort(ciber_cor_pmat[98, ])[1:20]
+sort(ciber_cor_pmat[33, ])[1:20]
+
+sort(ciber_cor_pmat[150, ])[1:20]
+sort(ciber_cor_pmat[3, ])[1:20]
+sort(ciber_cor_pmat[174, ])[1:20]
+sort(ciber_cor_pmat[16, ])[1:20]
+sort(ciber_cor_pmat[70, ])[1:20]
+# sort(ciber_cor_pmat[103, ])[1:20]
+
+
+ciber_feature = "VAF:peripheral nervous system:schwann cell"
+k = 46
+
+ciber_feature = "LIV:retina:retinal pigment epithelial cell"
+k = 98
+
+ciber_feature = "AOR:blood:natural killer cell"
+k = 33
+
+ciber_feature = "AOR:blood:macrophage"
+k = 150
+
+plot(
+	between$bwnet$eigengenes[, k],
+	ciber_freq_mat[, colnames(ciber_freq_mat) == ciber_feature],
+	xlab=paste("Module", k), ylab=ciber_feature
+)
+
+cor.test(
+	between$bwnet$eigengenes[, k],
+	ciber_freq_mat[, colnames(ciber_freq_mat) == ciber_feature]
+)
+
+
+ciber_cor_qval_tissues = sapply(strsplit(colnames(ciber_cor_qval), ":"), function(x) x[1])
+
+top_ciber_cor = sapply(1:nrow(ciber_cor_qval), function(k) {
+	# Identify dominant tissue in kth module
+	dominant_tissue = names(which.max(between_stats$tissue_counts[, k]))
+
+	# Map between tissue codes.
+	if (dominant_tissue == "BLOOD") {
+		dominant_tissue = "BLO"
+	} else if (dominant_tissue == "SKLM") {
+		dominant_tissue = "SKM"
+	} else if (dominant_tissue == "SF") {
+		dominant_tissue = "SUF"
+	}
+
+	# Only the q-values from the dominant tissue
+	qvals = ciber_cor_qval[k, ciber_cor_qval_tissues == dominant_tissue]
+
+	qvals = qvals[qvals < 0.05]  # FDR
+	qvals = sort(qvals)[1:5]  # top fractions
+	qvals = qvals[!is.na(qvals)]  # remove missing
+
+	# Format string of q-value results
+	if (length(qvals) == 0) {
+		return("")
+	} else {
+		cell_type = names(qvals)
+
+		# combine into single string, separated by ";" and including p-values in parenthesis
+		cell_type = paste0(cell_type, "(q=", format(qvals, digits=3), ")")
+
+		# cell_type = sapply(strsplit(cell_type, ":"), function(x) x[3])
+
+		cell_type = paste(cell_type, collapse=";")
+		return(cell_type)
+	}
+
+})
+
+ciber_tab = data.frame(top_cibersort=top_ciber_cor)
+
+
+# Endocrine factors explaining each module, cross-tissue.
+# --------------------------------------------------------
+
+# Load endocrine factors,
+endocrine = fread("~/Google Drive/projects/STARNET-endocrine/data/endo_scores_large.csv")
+
+# Get list of vectors of target genes for each endocrine factor
+endocrine_targets = strsplit(endocrine$sig_symbols, ";")
+
+# Prepend tissue creating target transcript IDs 
+endocrine_targets = lapply(1:length(endocrine_targets), function(k) {
+	paste0(endocrine$target_tissue[k], "_", endocrine_targets[[k]])
+})
+
+endocrine_targets_length = sapply(endocrine_targets, length)
+
+
+# Calculate enrichment for each factor in each module using Hypergeometric test
+
+# k = 150  # kth module
+# k = 166
+k = 98
+idx = between$clust == k
+
+# Gene symbols for kth module
+# module_symbols = between$meta_genes$gene_symbol[idx]
+module_symbols = paste0(between$meta_genes$tissue[idx], "_", between$meta_genes$gene_symbol[idx])
+
+# Overlap with 
+module_overlap = sapply(endocrine_targets, function(targets) {
+	return(length(intersect(targets, module_symbols)))
+})
+
+
+n_transcripts = nrow(between$meta_genes)
+
+
+
+# Hypergeometric test
+target_p = sapply(1:length(endocrine_targets), function(i) {
+	p_out = 1 - phyper(
+		module_overlap[i],
+		between_stats$size[k],
+		n_transcripts - between_stats$size[k],
+		endocrine_targets_length[i])
+	return(p_out)
+})
+
+
+target = data.frame(
+	endocrine_factor=endocrine$endocrine_factor,
+	from_tissue=endocrine$from_tissue,
+	target_tissue=endocrine$target_tissue,
+	sec_score=endocrine$sec_score)
+
+# Module overlap enrichment
+target$p = target_p
+
+#
+# target$padj = p.adjust(target$p, method="BH")
+target$padj = qvalue(target_p)$qvalue
+
+# Is the endocrine factor found in cross-tissue module?
+
+# Calculate fraction of module overlap
+
+target$module_coverage = module_overlap / between_stats$size[k]
+
+idx = target$padj < 0.05 & target$module_coverage > 0.1
+# idx = target$padj < 0.05
+sum(idx)
+
+target_sub = target[idx, ]
+target_sub[order(target_sub$module_coverage, decreasing=TRUE), ]
+
+
+hist(target_p, breaks=50)
+
+order(target_p)[1:5]
+sort(target_p)[1:5]
+
+# i = 13
+i = 2151
+i = 2154
+# i = 42627
+# i = 14783
+
+# p[i]
+
+endocrine_targets[[i]]
+module_symbols
+
+intersect(endocrine_targets[[i]], module_symbols)
+
+intersect(endocrine_targets[29], module_symbols)
+length(intersect(endocrine_targets[i], module_symbols))
+
+# Combined module table
+# -----------------------------------------------
+
+# general statistics
+mod_tab = data.frame(
+	mod_size=between_stats$size,
+	purity=between_stats$purity)
+
+mod_tab = cbind(mod_tab, t(between_stats$tissue_counts))
+
+# CAD-associations
+mod_tab = cbind(mod_tab, cad_tab)
+
+mod_tab = cbind(mod_tab, pheno_cor_pmat)
+
+# Top GO
+mod_tab = cbind(mod_tab, go_tab)
+
+mod_tab = cbind(mod_tab, ciber_tab)
+
+
+write.table(mod_tab, "co-expression/tables/module_tab.csv", sep=",", col.names=NA)
+
+
+head(mod_tab[order(mod_tab$cad_pval), ], 20)
+
+head(mod_tab[order(mod_tab$pval_DUKE), ], 20)
+head(mod_tab[order(mod_tab$pval_CRP), ], 20)
+
+# head(mod_tab[order(mod_tab$cad_pval), ], 30)
+
+
+plot(-log10(mod_tab$cad_pval), mod_tab$purity)

@@ -343,7 +343,7 @@ for (mod_name in names(modules)) {
 
 # Learn Bayesian networks for each module based on standardized expression data.
 # Input: 
-#		modules is a list of module (data.frames with columbs)
+#		modules is a list of module (data.frames with colums)
 #   	emat is a tissue:transcript expression matrix with corresponding meta data
 learnBayesNets = function(modules, meta_genes, emat) {
 	if (nrow(meta_genes) != nrow(emat)) {

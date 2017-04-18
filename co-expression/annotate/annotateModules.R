@@ -184,6 +184,20 @@ go_tab = data.frame(
 	top_go_cc=sapply(top_go_terms_cc, paste, collapse=";")
 )
 
+
+write.table(between_go_enrich_filter$bestPTerms$BP$enrichment,
+	"co-expression/tables/go_bp_tab.csv",
+	sep=",",
+	quote=FALSE,
+	row.names=FALSE)
+
+write.table(between_go_enrich_filter$bestPTerms$CC$enrichment,
+	"co-expression/tables/go_cc_tab.csv",
+	sep=",",
+	quote=FALSE,
+	row.names=FALSE)
+
+
 # head(between_go_enrich$bestPTerms$BP$enrichment)
 
 # i = 98  # Ariella's liver module
@@ -343,14 +357,21 @@ between_ciber_cor = lapply(1:length(between_ciber_cor), function(i) {
 # Get p-values for all correlations, in frequency x module matrix
 ciber_cor_pmat = sapply(between_ciber_cor, function(x) x$pval)
 rownames(ciber_cor_pmat) = colnames(between$bwnet$eigengenes)
+# Reomve commas from CIBERSORT features
+colnames(ciber_cor_pmat) = gsub(",", "",
+	colnames(ciber_freq_mat))
+
 # colnames(pheno_cor_pmat) = paste0("pval_", colnames(pheno_cor_pmat))
+
+# sapply(between_ciber_cor, function(x) x$pval)
+# sapp
 
 # FDR
 ciber_cor_qval = qvalue(ciber_cor_pmat)$qvalue
 
 
 # Combine into single table, flat format
-between_ciber_cor_all = Reduce(rbind, between_ciber_cor)
+between_ciber_cor_all = rbindlist(between_ciber_cor)
 
 # Overwrite q-value from module specific, same calculation as q-value matrix above
 between_ciber_cor_all$qval = qvalue(between_ciber_cor_all$p)$qvalue
@@ -359,6 +380,7 @@ between_ciber_cor_all$qval = qvalue(between_ciber_cor_all$p)$qvalue
 between_ciber_cor_all = between_ciber_cor_all[
 	order(between_ciber_cor_all$pval),
 ]
+between_ciber_cor_all$cibersort = gsub(",", "", between_ciber_cor_all$cibersort)  # remove commas from
 
 # Write table
 write.table(between_ciber_cor_all,
@@ -366,39 +388,6 @@ write.table(between_ciber_cor_all,
 	sep=",",
 	quote=FALSE,
 	row.names=FALSE)
-
-# sort(ciber_cor_pmat[98, ])[1:20]
-# # sort(ciber_cor_pmat[33, ])[1:20]
-# # sort(ciber_cor_pmat[150, ])[1:20]
-# # sort(ciber_cor_pmat[3, ])[1:20]
-# # sort(ciber_cor_pmat[174, ])[1:20]
-# # sort(ciber_cor_pmat[16, ])[1:20]
-# # sort(ciber_cor_pmat[70, ])[1:20]
-# # # sort(ciber_cor_pmat[103, ])[1:20]
-
-
-# ciber_feature = "VAF:peripheral nervous system:schwann cell"
-# k = 46
-
-# ciber_feature = "LIV:retina:retinal pigment epithelial cell"
-# k = 98
-
-# ciber_feature = "AOR:blood:natural killer cell"
-# k = 33
-
-# ciber_feature = "AOR:blood:macrophage"
-# k = 150
-
-# plot(
-# 	between$bwnet$eigengenes[, k],
-# 	ciber_freq_mat[, colnames(ciber_freq_mat) == ciber_feature],
-# 	xlab=paste("Module", k), ylab=ciber_feature
-# )
-
-# cor.test(
-# 	between$bwnet$eigengenes[, k],
-# 	ciber_freq_mat[, colnames(ciber_freq_mat) == ciber_feature]
-# )
 
 
 # Make table per module
@@ -453,19 +442,13 @@ endocrine_targets = lapply(1:length(endocrine_targets), function(k) {
 	paste0(endocrine$target_tissue[k], "_", endocrine_targets[[k]])
 })
 
+# Endocrine statistics
 endocrine_targets_length = sapply(endocrine_targets, length)
-
 n_transcripts = nrow(between$meta_genes)  # Total number of cross-tissue transcripts, used for Hypergeometric test
 
 
 # Calculate enrichment for each factor in each module using Hypergeometric test
-
-# k = 150  # kth module
-# k = 166
-k = 98
-
 targets_endocrine_enrich = lapply(1:max(between$clust), function(k) {
-# targets_endocrine_enrich = lapply(1:2, function(k) {
 	message(k)
 	idx = between$clust == k
 
@@ -501,7 +484,7 @@ targets_endocrine_enrich = lapply(1:max(between$clust), function(k) {
 	# Module overlap enrichment
 	target_tab$p = target_p
 
-	target_tab$padj = p.adjust(target$p, method="BH")
+	target_tab$padj = p.adjust(target_tab$p, method="BH")
 	# target_tab$padj = qvalue(p)$qvalue
 
 	# Calculate fraction of module overlap
@@ -518,11 +501,14 @@ targets_endocrine_enrich = lapply(1:max(between$clust), function(k) {
 	return(target_sub)
 })
 
-targets_endocrine_enrich = Reduce(rbind, targets_endocrine_enrich)
+# targets_endocrine_enrich = Reduce(rbind, targets_endocrine_enrich)
+targets_endocrine_enrich = rbindlist(targets_endocrine_enrich)
 
+write.table(targets_endocrine_enrich, "co-expression/tables/endocrine_tab.csv", sep=",",
+	# col.names=NA,
+	row.names=FALSE,
+	quote=FALSE)
 
-# sum(targets_endocrine_enrich$endocrine_in_module)
-# targets_endocrine_enrich[targets_endocrine_enrich$endocrine_in_module, ]
 
 # Make string of top-5 highest coverage
 endocrine_ids = paste0(targets_endocrine_enrich$from_tissue, "_", targets_endocrine_enrich$endocrine_factor)
@@ -537,32 +523,102 @@ endocrine_tab = data.frame(top_endocrine=top_endocrine)
 
 
 
-# sort(table(targets_endocrine_enrich$module))
 
-#
+# Risk enrichment, eQTLs in each cross-tissue module
+# ----------------------------------------------------------
 
-hist(target_p, breaks=50)
+# Load eQTL data
+eqtl_files = list.files(
+	file.path(data_dir, "eQTL/adjusted.final"),
+	pattern="fdr-0.10")
 
-order(target_p)[1:5]
-sort(target_p)[1:5]
+exclude_files = c(
+	"STARNET.eQTLs.MatrixEQTL.FC.cis.tbl.fdr-0.10",
+	"STARNET.eQTLs.MatrixEQTL.MP.cis.tbl.fdr-0.10")
 
-# i = 13
-i = 2151
-i = 2154
-# i = 42627
-# i = 14783
+eqtl_files = eqtl_files[!eqtl_files %in% exclude_files]
 
-# p[i]
+# Load eQTL data
+eqtls = lapply(eqtl_files, function(file_name) {
+	d = fread(file.path(data_dir, "eQTL/adjusted.final", file_name))
+	return(d)
+})
 
-endocrine_targets[[i]]
-module_symbols
+# Name each entry based on tissue
+names(eqtls) = sapply(strsplit(eqtl_files, "[.]"), function(x) x[4])  # tissue
+names(eqtls) = replace(names(eqtls), names(eqtls) == "Blood", "BLOOD")
 
-intersect(endocrine_targets[[i]], module_symbols)
+# Add tissue name to eqtls tables
+for (tissue in names(eqtls)) {
+	eqtls[[tissue]]$tissue = tissue
+}
 
-intersect(endocrine_targets[29], module_symbols)
-length(intersect(endocrine_targets[i], module_symbols))
+# Collapse all eQTL to single table
+eqtls = Reduce(rbind, eqtls)
 
 
+# Find eQTL gene symbols
+
+eqtls$gene_nosuf = sapply(strsplit(eqtls$gene, "[.]"), function(x) x[1])
+eqtls$tissue_id = paste0(eqtls$tissue, "_", eqtls$gene_nosuf)
+
+# For improved query performance based on ensembl ID without suffix
+between$meta_genes$ensembl_nosuf = sapply(strsplit(between$meta_genes$ensembl, "[.]"), function(x) x[1])
+between$meta_genes$tissue_id = paste0(between$meta_genes$tissue, "_", between$meta_genes$ensembl_nosuf)
+
+eqtls$gene_symbol = between$meta_genes$gene_symbol[
+	match(
+		eqtls$gene_nosuf,
+		between$meta_genes$ensembl_nosuf)
+]
+
+
+# Loop over each module 
+module_eqtls = lapply(1:max(between$clust), function(k) {
+	message(k)
+	idx = between$clust == k  # module genes in kth module
+
+	# find eQTLs associated with 
+	idx_eqtls = which(eqtls$tissue_id %in% between$meta_genes$tissue_id[idx])
+
+	sub_eqtls = eqtls[idx_eqtls, ]
+	sub_eqtls = sub_eqtls[order(sub_eqtls[["p-value"]]), ]
+
+	return(sub_eqtls)
+})
+
+
+# Get eQTL genes per module
+module_eqtl_genes = sapply(module_eqtls, function(sub_eqtls) {
+	symbols = paste0(sub_eqtls$tissue, "_", sub_eqtls$gene_symbol)
+	symbols = unique(na.omit(symbols))
+	# module_eqtls = unique(na.omit(sub_eqtls$gene_symbol))
+	# return(module_eqtls)
+	return(symbols)
+})
+
+# Output table
+eqtl_tab = data.frame(
+	n_eQTL_genes=sapply(module_eqtl_genes, length)
+)
+
+eqtl_tab$eQTL_gene_frac = eqtl_tab$n_eQTL_genes / between_stats$size
+# eqtl_tab$eQTL_genes = sapply(module_eqtl_genes, paste, collapse=";")
+eqtl_tab$top_eQTL_genes = sapply(module_eqtl_genes, function(genes) {
+	paste(na.omit(genes[1:5]), collapse=";")
+})
+
+
+
+# k = 33
+# k = 98
+# k = 177
+# k = 150
+# module_eqtl_genes[[k]]
+
+# length(module_eqtls)
+
+# data.frame(eqtls[idx_eqtls, ])
 
 
 # Combined module table
@@ -578,6 +634,9 @@ mod_tab = cbind(mod_tab, t(between_stats$tissue_counts))
 # CAD-associations
 mod_tab = cbind(mod_tab, cad_tab)
 
+# eQTL
+mod_tab = cbind(mod_tab, eqtl_tab)
+
 mod_tab = cbind(mod_tab, pheno_cor_pmat)
 
 mod_tab = cbind(mod_tab, endocrine_tab)
@@ -590,11 +649,23 @@ mod_tab = cbind(mod_tab, ciber_tab)
 write.table(mod_tab, "co-expression/tables/module_tab.csv", sep=",", col.names=NA)
 
 
-head(mod_tab[order(mod_tab$cad_pval), ], 20)
+# mod_tab = mod_tab[order(mod_tab$cad_pval), ]
 
+# plot(mod_tab$eQTL_gene_frac, type="l")
+
+# plot(-log10(mod_tab$cad_pval), mod_tab$eQTL_gene_frac)
+
+plot(-log10(mod_tab$cad_pval), -log10(mod_tab$pval_DUKE))
+cor.test(-log10(mod_tab$cad_pval), -log10(mod_tab$pval_DUKE))
+
+
+plot(-log10(mod_tab$cad_pval), -log10(mod_tab$pval_p_chol))
+cor.test(-log10(mod_tab$cad_pval), -log10(mod_tab$pval_p_chol))
+
+
+head(mod_tab[order(mod_tab$cad_pval), ], 20)
 head(mod_tab[order(mod_tab$pval_DUKE), ], 20)
 head(mod_tab[order(mod_tab$pval_CRP), ], 20)
-
 
 plot(-log10(mod_tab$cad_pval), -log10(mod_tab$pval_DUKE))
 cor.test(-log10(mod_tab$cad_pval), -log10(mod_tab$pval_DUKE))

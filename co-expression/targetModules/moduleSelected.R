@@ -25,6 +25,8 @@ library(rcausal)
 data_dir = "/Users/sk/DataProjects/cross-tissue"  # root of data directory
 setwd("/Users/sk/Google Drive/projects/cross-tissue")
 
+source("src/models/bayesNet.R")
+
 countModuleTissueStat = function(modules) {
 
 	out = list()
@@ -341,46 +343,6 @@ for (mod_name in names(modules)) {
 # 	quote=FALSE)
 
 
-# Learn Bayesian networks for each module based on standardized expression data.
-# Input: 
-#		modules is a list of module (data.frames with colums)
-#   	emat is a tissue:transcript expression matrix with corresponding meta data
-learnBayesNets = function(modules, meta_genes, emat) {
-	if (nrow(meta_genes) != nrow(emat)) {
-		stop("Expression matrix and transcript meta data mismatch.")
-	}
-
-	if (! "id" %in% colnames(meta_genes)) {
-		stop("Transcript meta data does not contain id column")
-	}
-
-	bayes_nets = lapply(modules, function(mod) {
-		# Tissue_transcipt IDs for module
-		mod_ids = paste(mod$tissue, mod$transcript_id, sep="_")
-		mod_gene_symbols = mod$gene_symbol
-
-		# Print first 10 transcript IDs
-		message("Module: ", paste(mod_ids[1:2], collapse=", "), "...(n=", length(mod_ids), ")")
-
-		idx = match(mod_ids, meta_genes$id)
-
-		# Get matrix
-		submat = t(emat[idx, ])
-		colnames(submat) = mod_ids
-
-		# Standardize and impute missing to mean
-		submat = scale(submat)
-		submat[is.na(submat)] = 0.0
-		submat = as.data.frame(submat)
-
-		# bn = hc(submat)  # greedy hill climbing, BIC score
-		bn = fges(submat, maxDegree=100)  # Fast-greedy equivalence search
-
-		return(bn)
-	})
-
-	return(bayes_nets)
-}
 
 
 
@@ -412,6 +374,7 @@ edge_list = lapply(bayes_nets, function(net) {
 
 # Combine edge list
 edge_list = Reduce(rbind, edge_list)
+
 
 edge_list = cbind(edge_list, 1)
 colnames(edge_list) = c("TAIL", "HEAD", "WEIGHT")

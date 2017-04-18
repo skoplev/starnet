@@ -20,6 +20,7 @@ source("src/models/regr.R")  # regression models
 source("src/models/cor.R")
 source("src/models/enrichment.R")
 source("src/parse.R")
+source("src/models/bayesNet.R")
 
 
 # Parses module data
@@ -60,7 +61,6 @@ countModuleTissueStat = function(modules) {
 }
 
 
-
 # Load cross-tissue modules
 # ------------------------------
 between = new.env()
@@ -80,6 +80,28 @@ complete = parseModuleData(complete)
 
 between_stats = countModuleTissueStat(between)
 complete_stats = countModuleTissueStat(complete)
+
+
+# Load normalized gene expression data, used for evaluating Bayesian networks within cross-tissue modules
+# --------------------------------------------------------------
+emat_file = "STARNET/gene_exp_norm_reshape/expr_recast.RData"
+
+load(file.path(data_dir, emat_file), verbose=TRUE)
+
+emat = expr_recast[, 3:ncol(expr_recast)]
+meta_genes = expr_recast[, 1:2]
+meta_genes = as.data.frame(meta_genes)
+
+# # tissue_transcript IDs
+# meta_genes$id = paste(meta_genes$tissue, meta_genes$transcript_id, sep="_")
+# meta_genes$ensembl = sapply(strsplit(as.character(meta_genes$transcript_id), "_"), function(x) x[2])
+
+rm(expr_recast)
+
+# Test if the gene metadata is the same as for the cross-tissue modules
+if (!all(meta_genes$transcript_id == between$meta_genes$transcript_id)) {
+	stop("Transcript mismatch")
+}
 
 
 # Load phenotype data
@@ -619,6 +641,88 @@ eqtl_tab$top_eQTL_genes = sapply(module_eqtl_genes, function(genes) {
 # length(module_eqtls)
 
 # data.frame(eqtls[idx_eqtls, ])
+
+
+# Bayesian network for each cross-tissue module, Key driver analysis.
+# -----------------------------------------------------------
+source("src/models/bayesNet.R")
+library(igraph)
+library(rcausal)
+library(Mergeomics)
+
+bayes_dir = "co-expression/annotate/bayesNet"
+
+# Infer Bayeisan networks withing cross-tissue modules
+bayes_nets = learnBayesNets.2(between$clust,
+	between$meta_genes,
+	emat,
+	max_size=3000)
+
+edge_list = lapply(bayes_nets, function(net) {
+	if (is.na(net)) {
+		return(NA)
+	} else {
+		g = graph_from_graphnel(net$graphNEL)
+		return(as_edgelist(g))
+	}
+})
+names(edge_list) = 1:length(edge_list)  # cluster ids
+
+# Remove entries for large modules without bayesian networks
+edge_list = edge_list[!is.na(edge_list)]
+
+# Combine edge list
+edge_list = Reduce(rbind, edge_list)
+
+
+edge_list = cbind(edge_list, 1)  # weight
+colnames(edge_list) = c("TAIL", "HEAD", "WEIGHT")
+edge_list = as.data.frame(edge_list)
+
+
+# Write edge list to file, used for input to Weighted Key Driver analysis.
+write.table(edge_list,
+	file.path(bayes_dir, "all.tsv"),
+	sep="\t",
+	row.names=FALSE,
+	quote=FALSE
+)
+
+# Make module table for KDA.
+kda_mod_tab = data.frame(
+	MODULE=between$clust,
+	NODE=paste(between$meta_genes$tissue, between$meta_genes$transcript_id, sep="_")
+)
+
+write.table(kda_mod_tab,
+	file.path(bayes_dir, "nodes.tsv")
+	sep="\t",
+	row.names=FALSE,
+	quote=FALSE
+)
+
+# Weighted key driver analysis (wKDA) of Bayesian networks within each cross-tissue module
+# kda_label = paste0(gene, "_key_driver")
+kda_label = "modules"
+job.kda = list()
+job.kda$netfile = file.path(bayes_dir, "all.tsv")
+job.kda$modfile = file.path(bayes_dir, "nodes.tsv")
+job.kda$label = kda_label
+job.kda$folder = bayes_dir
+job.kda$nperm = 20
+
+job.kda = kda.configure(job.kda)
+job.kda = kda.start(job.kda)
+job.kda = kda.prepare(job.kda)
+job.kda = kda.analyze(job.kda)
+job.kda = kda.finish(job.kda)
+
+# load results table
+kda_results = read.table(
+	file.path(bayes_dir, "kda", paste0(kda_label, ".results.txt")),
+	header=TRUE
+)
+
 
 
 # Combined module table

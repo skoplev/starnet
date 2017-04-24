@@ -130,3 +130,56 @@ parseTranscriptId = function(meta_genes) {
 	})
 	return(meta_genes)
 }
+
+
+# Parses module data
+parseModuleData = function(mod_env)  {
+	# Clusters as integers
+	mod_env$clust = as.integer(factor(mod_env$bwnet$colors))
+	mod_env$meta_genes = parseTranscriptId(mod_env$meta_genes)
+
+	# Rename eigengene matrix
+	eigen_gene_names = substring(colnames(mod_env$bwnet$eigengenes), 3)
+	eigen_gene_n = match(eigen_gene_names, levels(factor(mod_env$bwnet$colors)))
+
+	colnames(mod_env$bwnet$eigengenes) = eigen_gene_n
+
+	mod_env$bwnet$eigengenes = mod_env$bwnet$eigengenes[, order(eigen_gene_n)]
+
+	return(mod_env)
+}
+
+
+
+parseCibersortFiles = function(freq_files, data_dir) {
+	require(data.table)
+	ciber_freq = lapply(freq_files, function(file_name) {
+		file_path = file.path(data_dir, "CIBERSORT/out_freq", file_name)
+
+		tissue = strsplit(file_name, "[.]")[[1]][4]
+
+		# Load CIBERSORT data
+		freq = fread(file_path)
+
+		# Parse header separately
+		header = read.table(file_path, nrows=1, sep="\t")
+
+		header = unlist(lapply(header, as.character))
+		header = c("sample", header)
+
+		# header
+		colnames(freq) = header
+
+		# Only numerical fraction entries
+		freq_mat = freq[, 2:(ncol(freq) - 3)]
+		freq_mat = data.matrix(freq_mat)
+
+		rownames(freq_mat) = freq$sample
+		colnames(freq_mat) = paste(tissue, colnames(freq_mat), sep=":")
+
+		return(freq_mat)
+	})
+
+	return(ciber_freq)
+}
+

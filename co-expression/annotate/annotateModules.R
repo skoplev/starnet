@@ -1,4 +1,6 @@
-rm(list=ls())
+# rm(list=ls())
+
+options(java.parameters = "-Xmx8g")  # Max Java memory heap size, for rcausal
 
 library(RColorBrewer)
 library(gplots)
@@ -21,25 +23,6 @@ source("src/models/cor.R")
 source("src/models/enrichment.R")
 source("src/parse.R")
 source("src/models/bayesNet.R")
-
-
-# Parses module data
-parseModuleData = function(mod_env)  {
-	# Clusters as integers
-	mod_env$clust = as.integer(factor(mod_env$bwnet$colors))
-	mod_env$meta_genes = parseTranscriptId(mod_env$meta_genes)
-
-	# Rename eigengene matrix
-	eigen_gene_names = substring(colnames(mod_env$bwnet$eigengenes), 3)
-	eigen_gene_n = match(eigen_gene_names, levels(factor(mod_env$bwnet$colors)))
-
-	colnames(mod_env$bwnet$eigengenes) = eigen_gene_n
-
-	mod_env$bwnet$eigengenes = mod_env$bwnet$eigengenes[, order(eigen_gene_n)]
-
-	return(mod_env)
-}
-
 
 countModuleTissueStat = function(modules) {
 
@@ -91,10 +74,6 @@ load(file.path(data_dir, emat_file), verbose=TRUE)
 emat = expr_recast[, 3:ncol(expr_recast)]
 meta_genes = expr_recast[, 1:2]
 meta_genes = as.data.frame(meta_genes)
-
-# # tissue_transcript IDs
-# meta_genes$id = paste(meta_genes$tissue, meta_genes$transcript_id, sep="_")
-# meta_genes$ensembl = sapply(strsplit(as.character(meta_genes$transcript_id), "_"), function(x) x[2])
 
 rm(expr_recast)
 
@@ -250,11 +229,8 @@ cad_genes = paste(cad_genes, collapse="/")
 cad_genes = strsplit(cad_genes, "/")[[1]]
 cad_genes = unique(cad_genes)
 
-# between$clust
-# between$meta_genes
-
 cad_gene_bool = between$meta_genes$gene_symbol %in% cad_genes
-sum(cad_gene_bool)
+# sum(cad_gene_bool)
 
 # Aggregate CAD gene symbols by module
 cad_genes_module = sapply(1:max(between$clust), function(k) {
@@ -300,36 +276,11 @@ exclude_freq_files = c(
 freq_files = freq_files[!freq_files %in% exclude_freq_files]
 
 # Parse files returning only matrices
-ciber_freq = lapply(freq_files, function(file_name) {
-	file_path = file.path(data_dir, "CIBERSORT/out_freq", file_name)
+ciber_freq = parseCibersortFiles(freq_files)
 
-	tissue = strsplit(file_name, "[.]")[[1]][4]
-
-	# Load CIBERSORT data
-	freq = fread(file_path)
-
-	# Parse header separately
-	header = read.table(file_path, nrows=1, sep="\t")
-
-	header = unlist(lapply(header, as.character))
-	header = c("sample", header)
-
-	# header
-	colnames(freq) = header
-
-	# Only numerical fraction entries
-	freq_mat = freq[, 2:(ncol(freq) - 3)]
-	freq_mat = data.matrix(freq_mat)
-
-	rownames(freq_mat) = freq$sample
-	colnames(freq_mat) = paste(tissue, colnames(freq_mat), sep=":")
-
-	return(freq_mat)
-})
 
 # Align CIBERSORT frequency data to patient_ids
 ciber_freq = lapply(ciber_freq, function(freq_mat) {
-
 	idx = match(
 		patient_ids,
 		sapply(strsplit(rownames(freq_mat), "_"), function(x) x[2])
@@ -379,14 +330,9 @@ between_ciber_cor = lapply(1:length(between_ciber_cor), function(i) {
 # Get p-values for all correlations, in frequency x module matrix
 ciber_cor_pmat = sapply(between_ciber_cor, function(x) x$pval)
 rownames(ciber_cor_pmat) = colnames(between$bwnet$eigengenes)
-# Reomve commas from CIBERSORT features
+# Remove commas from CIBERSORT features
 colnames(ciber_cor_pmat) = gsub(",", "",
 	colnames(ciber_freq_mat))
-
-# colnames(pheno_cor_pmat) = paste0("pval_", colnames(pheno_cor_pmat))
-
-# sapply(between_ciber_cor, function(x) x$pval)
-# sapp
 
 # FDR
 ciber_cor_qval = qvalue(ciber_cor_pmat)$qvalue
@@ -468,7 +414,6 @@ endocrine_targets = lapply(1:length(endocrine_targets), function(k) {
 endocrine_targets_length = sapply(endocrine_targets, length)
 n_transcripts = nrow(between$meta_genes)  # Total number of cross-tissue transcripts, used for Hypergeometric test
 
-
 # Calculate enrichment for each factor in each module using Hypergeometric test
 targets_endocrine_enrich = lapply(1:max(between$clust), function(k) {
 	message(k)
@@ -481,7 +426,6 @@ targets_endocrine_enrich = lapply(1:max(between$clust), function(k) {
 	module_overlap = sapply(endocrine_targets, function(targets) {
 		return(length(intersect(targets, module_symbols)))
 	})
-
 
 	# Hypergeometric test, enrichment of module transcripts in endocrine target genes.
 	target_p = sapply(1:length(endocrine_targets), function(i) {
@@ -527,10 +471,8 @@ targets_endocrine_enrich = lapply(1:max(between$clust), function(k) {
 targets_endocrine_enrich = rbindlist(targets_endocrine_enrich)
 
 write.table(targets_endocrine_enrich, "co-expression/tables/endocrine_tab.csv", sep=",",
-	# col.names=NA,
 	row.names=FALSE,
 	quote=FALSE)
-
 
 # Make string of top-5 highest coverage
 endocrine_ids = paste0(targets_endocrine_enrich$from_tissue, "_", targets_endocrine_enrich$endocrine_factor)
@@ -542,8 +484,6 @@ top_endocrine = sapply(1:max(between$clust), function(k) {
 })
 
 endocrine_tab = data.frame(top_endocrine=top_endocrine)
-
-
 
 
 # Risk enrichment, eQTLs in each cross-tissue module
@@ -578,9 +518,7 @@ for (tissue in names(eqtls)) {
 # Collapse all eQTL to single table
 eqtls = Reduce(rbind, eqtls)
 
-
 # Find eQTL gene symbols
-
 eqtls$gene_nosuf = sapply(strsplit(eqtls$gene, "[.]"), function(x) x[1])
 eqtls$tissue_id = paste0(eqtls$tissue, "_", eqtls$gene_nosuf)
 
@@ -594,7 +532,6 @@ eqtls$gene_symbol = between$meta_genes$gene_symbol[
 		between$meta_genes$ensembl_nosuf)
 ]
 
-
 # Loop over each module 
 module_eqtls = lapply(1:max(between$clust), function(k) {
 	message(k)
@@ -604,11 +541,13 @@ module_eqtls = lapply(1:max(between$clust), function(k) {
 	idx_eqtls = which(eqtls$tissue_id %in% between$meta_genes$tissue_id[idx])
 
 	sub_eqtls = eqtls[idx_eqtls, ]
+
+	sub_eqtls$module = k
+
 	sub_eqtls = sub_eqtls[order(sub_eqtls[["p-value"]]), ]
 
 	return(sub_eqtls)
 })
-
 
 # Get eQTL genes per module
 module_eqtl_genes = sapply(module_eqtls, function(sub_eqtls) {
@@ -625,22 +564,13 @@ eqtl_tab = data.frame(
 )
 
 eqtl_tab$eQTL_gene_frac = eqtl_tab$n_eQTL_genes / between_stats$size
-# eqtl_tab$eQTL_genes = sapply(module_eqtl_genes, paste, collapse=";")
 eqtl_tab$top_eQTL_genes = sapply(module_eqtl_genes, function(genes) {
 	paste(na.omit(genes[1:5]), collapse=";")
 })
 
-
-
-# k = 33
-# k = 98
-# k = 177
-# k = 150
-# module_eqtl_genes[[k]]
-
-# length(module_eqtls)
-
-# data.frame(eqtls[idx_eqtls, ])
+# write.table(rbindlist(module_eqtls), "co-expression/tables/eQTL_tab.csv",
+# 	col.names=NA,
+# 	sep=",")
 
 
 # Bayesian network for each cross-tissue module, Key driver analysis.
@@ -695,7 +625,7 @@ kda_mod_tab = data.frame(
 )
 
 write.table(kda_mod_tab,
-	file.path(bayes_dir, "nodes.tsv")
+	file.path(bayes_dir, "nodes.tsv"),
 	sep="\t",
 	row.names=FALSE,
 	quote=FALSE
@@ -717,13 +647,35 @@ job.kda = kda.prepare(job.kda)
 job.kda = kda.analyze(job.kda)
 job.kda = kda.finish(job.kda)
 
+
 # load results table
 kda_results = read.table(
 	file.path(bayes_dir, "kda", paste0(kda_label, ".results.txt")),
 	header=TRUE
 )
 
+# k = 98
+# k = 20
+# k = 150
+# k = 33
+# k = 177
+# k = 74
+# k = 65
+# k = 117
+# k = 162
+# k = 82
+# k = 150
+# kda_results[kda_results$MODULE == k, ]
 
+top_key_drivers = sapply(1:max(between$clust), function(k) {
+	idx = kda_results$MODULE == k
+	top_nodes = na.omit(kda_results$NODE[idx][1:5])
+	top_nodes = as.character(top_nodes)
+	top_nodes = sapply(strsplit(top_nodes, "_"), function(x) paste(x[1:2], collapse="_"))
+	return(paste(top_nodes, collapse=";"))
+})
+
+kd_tab = data.frame(top_key_drivers=top_key_drivers)
 
 # Combined module table
 # -----------------------------------------------
@@ -741,14 +693,19 @@ mod_tab = cbind(mod_tab, cad_tab)
 # eQTL
 mod_tab = cbind(mod_tab, eqtl_tab)
 
+# Phenotype correlations
 mod_tab = cbind(mod_tab, pheno_cor_pmat)
 
+# Endocrine factors
 mod_tab = cbind(mod_tab, endocrine_tab)
 
 # Top GO
 mod_tab = cbind(mod_tab, go_tab)
 
+# CIBERSORT correlations
 mod_tab = cbind(mod_tab, ciber_tab)
+
+mod_tab = cbind(mod_tab, kd_tab)
 
 write.table(mod_tab, "co-expression/tables/module_tab.csv", sep=",", col.names=NA)
 

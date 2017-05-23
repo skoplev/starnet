@@ -33,7 +33,6 @@ pheno_matched = pheno[match(between$patient_ids, pheno$starnet.ID), ]
 
 
 # Load module overview table
-
 module_tab = read.table("co-expression/tables/module_tab.csv",
 	sep=",",
 	header=TRUE
@@ -128,7 +127,6 @@ V(g)$type = c(
 	rep("cell_type_freq", ncol(sub_ciber_freq_mat)),
 	rep("phenotype", ncol(sub_pheno_matched))
 )	
-
 
 write_graph(g,
 	file="co-expression/eigenNetw/bayes_net2.gml",

@@ -224,7 +224,11 @@ delou = read.table(file.path(data_dir, "Deloukas/ng.csv"),
 	header=TRUE)
 
 # Get CAD gene symbols from proximal loci
-cad_genes = delou$Loci_Nearest_Transcript
+cad_genes = delou$Loci_Nearest_Transcript[
+	delou$Definition. == "Known_CAD_hit" |
+	delou$Definition. == "novel_CAD_hit"
+]
+
 cad_genes = paste(cad_genes, collapse="/")
 cad_genes = strsplit(cad_genes, "/")[[1]]
 cad_genes = unique(cad_genes)
@@ -276,7 +280,7 @@ exclude_freq_files = c(
 freq_files = freq_files[!freq_files %in% exclude_freq_files]
 
 # Parse files returning only matrices
-ciber_freq = parseCibersortFiles(freq_files)
+ciber_freq = parseCibersortFiles(freq_files, data_dir)
 
 
 # Align CIBERSORT frequency data to patient_ids
@@ -336,7 +340,6 @@ colnames(ciber_cor_pmat) = gsub(",", "",
 
 # FDR
 ciber_cor_qval = qvalue(ciber_cor_pmat)$qvalue
-
 
 # Combine into single table, flat format
 between_ciber_cor_all = rbindlist(between_ciber_cor)
@@ -572,6 +575,14 @@ eqtl_tab$top_eQTL_genes = sapply(module_eqtl_genes, function(genes) {
 # 	col.names=NA,
 # 	sep=",")
 
+# CAD genes overlap with eQTLs
+eqtl_tab$eQTL_cad_genes = sapply(module_eqtl_genes, function(tissue_gene_ids) {
+	gene_symbols = sapply(strsplit(as.character(tissue_gene_ids), "_"), function(x) x[2])
+
+	eqtl_cad_genes = tissue_gene_ids[gene_symbols %in% cad_genes]
+	return(paste0(eqtl_cad_genes, collapse=";"))
+})
+
 
 # Bayesian network for each cross-tissue module, Key driver analysis.
 # -----------------------------------------------------------
@@ -675,7 +686,20 @@ top_key_drivers = sapply(1:max(between$clust), function(k) {
 	return(paste(top_nodes, collapse=";"))
 })
 
-kd_tab = data.frame(top_key_drivers=top_key_drivers)
+
+# Key drivers that are also eQTLs
+key_driver_eQTL_genes = sapply(1:max(between$clust), function(k) {
+	idx = kda_results$MODULE == k
+	nodes = as.character(kda_results$NODE[idx])
+	nodes = sapply(strsplit(nodes, "_"), function(x) paste(x[1:2], collapse="_"))
+
+	eqtl_nodes = nodes[nodes %in% module_eqtl_genes[[k]]]
+
+	return(paste(eqtl_nodes, collapse=";"))
+})
+
+kd_tab = data.frame(top_key_drivers=top_key_drivers, key_driver_eQTL_genes=key_driver_eQTL_genes)
+
 
 # Combined module table
 # -----------------------------------------------

@@ -224,47 +224,164 @@ delou = read.table(file.path(data_dir, "Deloukas/ng.csv"),
 	header=TRUE)
 
 # Get CAD gene symbols from proximal loci
-cad_genes = delou$Loci_Nearest_Transcript[
-	delou$Definition. == "Known_CAD_hit" |
-	delou$Definition. == "novel_CAD_hit"
-]
+cad_genes = delou$Loci_Nearest_Transcript
+
+# cad_genes = delou$Loci_Nearest_Transcript[
+# 	delou$Definition. == "Known_CAD_hit" |
+# 	delou$Definition. == "novel_CAD_hit"
+# ]
 
 cad_genes = paste(cad_genes, collapse="/")
 cad_genes = strsplit(cad_genes, "/")[[1]]
 cad_genes = unique(cad_genes)
 
-cad_gene_bool = between$meta_genes$gene_symbol %in% cad_genes
-# sum(cad_gene_bool)
 
-# Aggregate CAD gene symbols by module
-cad_genes_module = sapply(1:max(between$clust), function(k) {
-	idx = between$clust == k & cad_gene_bool
+hyperGeometricModuleTest = function(env, genes) {
+	gene_bool = env$meta_genes$gene_symbol %in% genes
+	# sum(gene_bool)
 
-	if (sum(idx) == 0) {
-		return(c())
-	} else {
-		return(between$meta_genes[idx, ])
-	}
-})
+	# Aggregate gene symbols by module
+	genes_module = sapply(1:max(env$clust), function(k) {
+		idx = env$clust == k & gene_bool
 
-# Count number of found CAD-associated genes
-cad_tab = data.frame(n_cad_genes=sapply(cad_genes_module, function(df) max(0, nrow(df))))
-cad_tab$cad_genes = sapply(cad_genes_module, function(df) paste(df$gene_symbol, collapse=";"))
+		if (sum(idx) == 0) {
+			return(c())
+		} else {
+			return(env$meta_genes[idx, ])
+		}
+	})
 
-# Hypergeometric test of CAD-associated transcripts in each module
-m_cad_mRNA = sum(between$meta_genes$gene_symbol %in% cad_genes)
-n_non_cad_mRNA = sum(! between$meta_genes$gene_symbol %in% cad_genes)
+	# Count number of found GWAS-associated genes
+	tab = data.frame(n_genes=sapply(genes_module, function(df) max(0, nrow(df))))
+	tab$genes = sapply(genes_module, function(df) paste(df$gene_symbol, collapse=";"))
 
-p_cad_hyper = sapply(1:max(between$clust), function(k) {
-	module_size = between_stats$size[k]
-	cad_module_mRNA = max(0, nrow(cad_genes_module[[k]]))
+	# Hypergeometric test of CAD-associated transcripts in each module
+	m_mRNA = sum(env$meta_genes$gene_symbol %in% genes)
+	n_non_mRNA = sum(! env$meta_genes$gene_symbol %in% genes)
 
-	p = 1 - phyper(cad_module_mRNA, m_cad_mRNA, n_non_cad_mRNA, module_size)
-	return(p)
-})
+	p_hyper = sapply(1:max(env$clust), function(k) {
+		module_size = between_stats$size[k]
+		module_mRNA = max(0, nrow(genes_module[[k]]))
 
-cad_tab$cad_pval = p_cad_hyper
-cad_tab$cad_qvalue = qvalue(cad_tab$cad_pval)$qvalue
+		p = 1 - phyper(module_mRNA, m_mRNA, n_non_mRNA, module_size)
+		return(p)
+	})
+
+	tab$pval = p_hyper
+	try({
+		tab$qvalue = qvalue(tab$pval)$qvalue
+	})
+
+	return(tab)
+}
+
+cad_tab = hyperGeometricModuleTest(between, cad_genes)
+
+
+# GWAS traits in general
+# ---------------------------------------------------------------------
+
+gwas = fread("~/DataBases/GWAS/gwas_catalog_v1.0-associations_e88_r2017-05-29.tsv")
+
+
+# Overview of GWAS traits, exploration of traits
+gwas_counts = sort(table(gwas[["DISEASE/TRAIT"]]))
+gwas_traits = names(gwas_counts)
+
+write.csv(rev(gwas_counts), "GWAS_counts.csv", row.names=FALSE)
+
+gwas_counts[grep("diabetes", gwas_traits, ignore.case=TRUE)]
+gwas_counts[grep("lipid", gwas_traits, ignore.case=TRUE)]
+
+gwas_counts[grep("LDL", gwas_traits, ignore.case=TRUE)]
+gwas_counts[grep("HDL", gwas_traits, ignore.case=TRUE)]
+gwas_counts[grep("cholesterol", gwas_traits, ignore.case=TRUE)]
+gwas_counts[grep("glucose", gwas_traits, ignore.case=TRUE)]
+gwas_counts[grep("insulin", gwas_traits, ignore.case=TRUE)]
+
+trait = "Visceral fat"
+trait = "Phospholipid levels"
+idx = gwas[["DISEASE/TRAIT"]] == trait
+data.frame(gwas[idx, ])
+
+
+
+
+# Returns vector of gene symbols reported for GWAS trait.
+# gwas is a data.table from EBI GWAS catalog
+getGWAS = function(gwas, trait) {
+	exclude_genes = c("intergenic")
+
+	idx = gwas[["DISEASE/TRAIT"]] == trait
+	message("Found GWAS: ", sum(idx))
+
+	# Find associated genes
+	gwas_genes = trimws(
+		unlist(
+			strsplit(gwas[["REPORTED GENE(S)"]][idx], ",")
+		)
+	)
+	gwas_genes = unique(gwas_genes)
+
+	gwas_genes = gwas_genes[!gwas_genes %in% exclude_genes]
+
+	return(gwas_genes)
+}
+
+# GWAS traits/phenotypes to include in analysis
+traits = c(
+	"Type 2 diabetes",
+	"Phospholipid levels (plasma)",
+	"Lipid metabolism phenotypes",
+	"LDL cholesterol",
+	"HDL cholesterol",
+	"Cholesterol, total",
+	"Glucose homeostasis traits",
+	# "Fasting plasma glucose",
+	# "Fasting glucose-related traits",
+	"Lipid traits",
+	"Blood pressure",
+	"Systolic blood pressure",
+	"Diastolic blood pressure",
+	"Coronary artery calcification",
+	"Hypertension",
+	"Myocardial infarction",
+	"Visceral fat",
+	"Response to statin therapy",
+	"C-reactive protein"
+)
+
+gwas_genes = list()
+gwas_genes = lapply(traits, function(trait) getGWAS(gwas, trait))
+names(gwas_genes) = traits
+
+gwas_tabs = lapply(gwas_genes, function(genes) hyperGeometricModuleTest(between, genes))
+
+# gwas_enrich_pval = sapply(gwas_tabs, function(x) x$pval)
+gwas_enrich_pval = sapply(c(gwas_tabs, list("CAD"=cad_tab)), function(x) x$pval)
+
+
+mat = gwas_enrich_pval
+rownames(mat) = 1:nrow(gwas_enrich_pval)
+
+idx = apply(gwas_enrich_pval, 1, min) < 0.01
+mat = mat[idx, ]
+
+# sum(idx)
+
+pdf("co-expression/annotate/plots/GWAS_enrichment.pdf", height=5)
+heatmap.2(
+	-log10(t(mat)),
+	trace="none",
+	# col=colorRampPalette(brewer.pal(9, "YlOrRd"))(100),
+	col=colorRampPalette(brewer.pal(9, "YlGnBu"))(100),
+	margins=c(12, 8),
+	cexCol=0.3,
+	cexRow=0.5,
+	key.xlab="-log10 p",
+	xlab="Module", ylab="GWAS"
+)
+dev.off()
 
 
 # CIBERSORT frequencies, association with eigengenes

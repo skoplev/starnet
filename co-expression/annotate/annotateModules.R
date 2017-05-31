@@ -571,7 +571,17 @@ top_endocrine = sapply(1:max(between$clust), function(k) {
 	return(paste(top_endocrine, collapse=";"))
 })
 
-endocrine_tab = data.frame(top_endocrine=top_endocrine)
+# Count total number of endocrine factors found in each module
+within_module_endocrines = table(
+	factor(
+		targets_endocrine_enrich[targets_endocrine_enrich$endocrine_in_module, ]$module,
+		levels=1:max(between$clust)
+	)
+)
+
+endocrine_tab = data.frame(
+	top_endocrine=top_endocrine,
+	n_within_mod_endocrines=as.vector(within_module_endocrines))
 
 
 # Risk enrichment, eQTLs in each cross-tissue module
@@ -668,6 +678,7 @@ eqtl_tab$eQTL_cad_genes = sapply(module_eqtl_genes, function(tissue_gene_ids) {
 	return(paste0(eqtl_cad_genes, collapse=";"))
 })
 
+eqtl_tab$n_eQTL_cad_genes = sapply(eqtl_tab$eQTL_cad_genes, function(genes) length(strsplit(genes, ";")[[1]]))
 
 # Bayesian network for each cross-tissue module, Key driver analysis.
 # -----------------------------------------------------------
@@ -817,7 +828,6 @@ mod_tab = cbind(mod_tab, ciber_tab)
 mod_tab = cbind(mod_tab, kd_tab)
 
 write.table(mod_tab, "co-expression/tables/module_tab.csv", sep=",", col.names=NA)
-
 
 
 

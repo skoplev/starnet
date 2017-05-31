@@ -1,3 +1,6 @@
+# Bayesian network model of module eigengene including CIBERSORT frequencies
+# and phenotype features.
+
 options(java.parameters = "-Xmx8g")  # Max Java memory heap size, for rcausal
 
 library(rcausal)
@@ -19,7 +22,6 @@ load(file.path(data_dir, "modules/between_within-cross-tissue.RData"),
 between = parseModuleData(between)
 
 
-
 # Load phenotype data
 # ---------------------------
 # STARNET phenotype data
@@ -37,7 +39,6 @@ module_tab = read.table("co-expression/tables/module_tab.csv",
 	sep=",",
 	header=TRUE
 )
-
 
 
 # CIBERSORT frequencies, association with eigengenes
@@ -129,5 +130,5 @@ V(g)$type = c(
 )	
 
 write_graph(g,
-	file="co-expression/eigenNetw/bayes_net2.gml",
+	file="co-expression/eigenNetw/v1/bayes_net2.gml",
 	format="gml")

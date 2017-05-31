@@ -127,19 +127,8 @@ colnames(pheno_cor_pmat) = paste0("pval_", colnames(pheno_cor_pmat))
 
 
 
-# # Nominally significant modules
-# sig_mods = apply(pmat, 1, min) < 0.05
 
-# pmat = pmat[sig_mods, ]
 
-# hmap = heatmap.2(-log10(pmat), trace="none",
-# 	cexRow=1.2,
-# 	# cexCol=0.8,
-# 	key.title="",
-# 	key.xlab=expression("-log"[10] * " p"),
-# 	margins=c(10, 8),
-# 	col=colorRampPalette(brewer.pal(9, "YlGnBu"))(100)
-# )
 
 # between_pheno_cor = lapply(between_pheno_cor, function(tab) {
 # 	tab[order(tab$pval), ]
@@ -184,6 +173,7 @@ go_tab = data.frame(
 	top_go_bp=sapply(top_go_terms_bp, paste, collapse=";"),
 	top_go_cc=sapply(top_go_terms_cc, paste, collapse=";")
 )
+
 
 
 write.table(between_go_enrich_filter$bestPTerms$BP$enrichment,
@@ -359,29 +349,7 @@ gwas_tabs = lapply(gwas_genes, function(genes) hyperGeometricModuleTest(between,
 
 # gwas_enrich_pval = sapply(gwas_tabs, function(x) x$pval)
 gwas_enrich_pval = sapply(c(gwas_tabs, list("CAD"=cad_tab)), function(x) x$pval)
-
-
-mat = gwas_enrich_pval
-rownames(mat) = 1:nrow(gwas_enrich_pval)
-
-idx = apply(gwas_enrich_pval, 1, min) < 0.01
-mat = mat[idx, ]
-
-# sum(idx)
-
-pdf("co-expression/annotate/plots/GWAS_enrichment.pdf", height=5)
-heatmap.2(
-	-log10(t(mat)),
-	trace="none",
-	# col=colorRampPalette(brewer.pal(9, "YlOrRd"))(100),
-	col=colorRampPalette(brewer.pal(9, "YlGnBu"))(100),
-	margins=c(12, 8),
-	cexCol=0.3,
-	cexRow=0.5,
-	key.xlab="-log10 p",
-	xlab="Module", ylab="GWAS"
-)
-dev.off()
+rownames(gwas_enrich_pval) = 1:nrow(gwas_enrich_pval)
 
 
 # CIBERSORT frequencies, association with eigengenes
@@ -850,6 +818,205 @@ mod_tab = cbind(mod_tab, kd_tab)
 
 write.table(mod_tab, "co-expression/tables/module_tab.csv", sep=",", col.names=NA)
 
+
+
+
+# Collect pvalue for features
+# --------------------------------
+library(GO.db)
+
+
+pval_mats = list()  # matrix of p-values for each module 
+pval_mats$pheno = pheno_cor_pmat
+
+pval_mats$GWAS = gwas_enrich_pval
+
+include_go_terms = c(
+	"GO:0006629", # lipid metabolic process
+	"GO:0097006",  # regulation of plasma lipoprotein particle levels
+	"GO:0006695",  # cholesterol biosynthetic process
+	"GO:0006954",  # inflammatory response
+	"GO:0045321",  # leukocyte activation
+	"GO:0045087",  # innate immune response
+	"GO:0002250",  # adaptive immune response
+	"GO:0034377",  # plasma lipoprotein particle assembly
+	"GO:0098609",  # cell-cell adhesion
+	"GO:0001816",  # cytokine production
+	"GO:0019752",  # carboxylic acid metabolic process
+	"GO:0042981",  # regulation of apoptotic process
+	"GO:0030334"  # regulation of cell migration
+)
+
+pval_mats$GO = between_go_enrich$enrichmentP[, colnames(between_go_enrich$enrichmentP) %in% include_go_terms]
+colnames(pval_mats$GO) = Term(include_go_terms)
+
+
+include_ciber = c(
+	"AOR:blood:macrophage",
+	"AOR:blood:monocyte",
+	"MAM:blood:macrophage",
+	"MAM:blood:monocyte"
+)
+
+pval_mats$CIBERSORT = ciber_cor_pmat[, colnames(ciber_cor_pmat) %in% include_ciber]
+
+
+# Clamp p-values
+pval_mats = lapply(pval_mats, function(pval) {
+	min_pval = 10^-10
+	pval[pval < min_pval] = min_pval
+	return(pval)
+})
+
+
+
+
+
+# Module annotation significance plots
+# ---------------------------------
+
+# Nominally significant modules
+
+pval_all = Reduce(cbind, pval_mats)
+# sig_mods = apply(pval_all, 1, min) < 0.001
+
+# sig_mods = apply(pval_mats$pheno, 1, min) < 0.01 &
+# 	apply(pval_mats$GWAS, 1, min) < 0.01
+
+sig_mods = apply(pval_mats$pheno, 1, min) < 0.01 &
+	apply(pval_mats$GWAS, 1, min) < 0.01 &
+	apply(pval_mats$GO, 1, min) < 0.01
+
+# sig_mods = apply(pval_mats$pheno, 1, min) < 0.05 &
+# 	apply(pval_mats$GWAS, 1, min) < 0.05 &
+# 	apply(pval_mats$GO, 1, min) < 0.05
+
+
+# sig_mods = apply(pval_mats$pheno, 1, min) < 0.01 |
+# 	apply(pval_mats$GWAS, 1, min) < 0.01 |
+# 	apply(pval_mats$GO, 1, min) < 0.01
+
+
+sum(sig_mods)
+
+heatmap.2(
+	# -log10(t(pval_all)),
+	-log10(t(pval_all[sig_mods, ])),
+	trace="none",
+	col=colorRampPalette(brewer.pal(9, "YlGnBu"))(100),
+	breaks=seq(0, 6, length.out=101)
+)
+
+# mod_order = hclust(dist(-log(pval_all)))$order
+hc = hclust(dist(-log(pval_all[sig_mods, ])))
+mod_order = hc$order
+
+pdf("co-expression/annotate/plots/module_dendrogram.pdf", width=12, height=5)
+plot(hc)
+dev.off()
+
+# sig_mods = apply(pval_mats$pheno, 1, min) < 0.01
+
+
+pdf("co-expression/annotate/plots/pheno_cor.pdf", height=5)
+# mat = pval_mats$pheno[mod_order, ]
+mat = pval_mats$pheno[sig_mods, ][mod_order, ]
+hmap = heatmap.2(
+	-log10(t(mat)),
+	Colv=FALSE,
+	trace="none",
+	key.title="",
+	key.xlab=expression("-log"[10] * " p"),
+	col=colorRampPalette(brewer.pal(9, "YlOrRd"))(100),
+	breaks=seq(0, 5, length.out=101),
+	margins=c(12, 8),
+	cexCol=0.3,
+	cexRow=0.5,
+	ylab="Phenotype"
+)
+dev.off()
+
+
+# mat = pval_mats$GWAS
+# sig_mods = apply(gwas_enrich_pval, 1, min) < 0.01
+# mat = mat[idx, ]
+
+# sum(idx)
+
+pdf("co-expression/annotate/plots/GWAS_enrichment.pdf", height=5)
+# mat = pval_mats$GWAS[mod_order, ]
+mat = pval_mats$GWAS[sig_mods, ][mod_order, ]
+heatmap.2(
+	-log10(t(mat)),
+	Colv=FALSE,
+	trace="none",
+	col=colorRampPalette(brewer.pal(9, "Blues"))(100),
+	breaks=seq(0, 5, length.out=101),
+	margins=c(12, 8),
+	cexCol=0.3,
+	cexRow=0.5,
+	key.xlab="-log10 p",
+	xlab="Module", ylab="GWAS"
+)
+dev.off()
+
+
+pdf("co-expression/annotate/plots/GO_enrichment.pdf", height=5)
+# mat = pval_mats$GWAS[mod_order, ]
+mat = pval_mats$GO[sig_mods, ][mod_order, ]
+heatmap.2(
+	-log10(t(mat)),
+	Colv=FALSE,
+	trace="none",
+	col=colorRampPalette(brewer.pal(9, "Greens"))(100),
+	breaks=seq(0, 5, length.out=101),
+	margins=c(12, 8),
+	cexCol=0.3,
+	cexRow=0.5,
+	key.xlab="-log10 p",
+	xlab="Module",
+	ylab="GO"
+)
+dev.off()
+
+pdf("co-expression/annotate/plots/CIBERSORT_enrichment.pdf", height=5)
+# mat = pval_mats$GWAS[mod_order, ]
+mat = pval_mats$CIBERSORT[sig_mods, ][mod_order, ]
+heatmap.2(
+	-log10(t(mat)),
+	Colv=FALSE,
+	trace="none",
+	col=colorRampPalette(brewer.pal(9, "Purples"))(100),
+	breaks=seq(0, 5, length.out=101),
+	margins=c(12, 8),
+	cexCol=0.3,
+	cexRow=0.5,
+	key.xlab="-log10 p",
+	xlab="Module",
+	ylab="CIBERSORT"
+)
+dev.off()
+
+
+tissue_col = brewer.pal(9, "Set1")[-6]
+
+pdf("co-expression/annotate/plots/tissue_distribution.pdf", height=2.5)
+mat = between_stats$tissue_counts
+colnames(mat) = 1:ncol(mat)
+mat = mat[, sig_mods][, mod_order]
+barplot(mat,
+	ylim=c(0, 2000),
+	border=NA,
+	names.arg=colnames(mat),
+	cex.names=0.3,
+	las=2,
+	col=tissue_col)
+legend("topright", legend=rownames(between_stats$tissue_counts),
+	pch=15,
+	col=tissue_col,
+	cex=0.4
+)
+dev.off()
 
 # mod_tab = mod_tab[order(mod_tab$cad_pval), ]
 

@@ -251,9 +251,10 @@ intersect(g1, intersect(g2, g3))
 # Find modules associated with specific genes.
 #-----------------------------------------------------------------
 
-gene = "KIAA1462"  # gene to look up
+# gene = "KIAA1462"  # gene to look up
 # gene = "UBR4"
 # gene = "U2AF2"
+gene = "ADCY9"
 
 
 

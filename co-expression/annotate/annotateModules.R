@@ -794,7 +794,10 @@ key_driver_eQTL_genes = sapply(1:max(between$clust), function(k) {
 	return(paste(eqtl_nodes, collapse=";"))
 })
 
-kd_tab = data.frame(top_key_drivers=top_key_drivers, key_driver_eQTL_genes=key_driver_eQTL_genes)
+kd_tab = data.frame(top_key_drivers=top_key_drivers,
+	key_driver_eQTL_genes=key_driver_eQTL_genes,
+	n_key_driver_eQTL_genes=sapply(strsplit(key_driver_eQTL_genes, ";"), length)
+	)
 
 
 # Combined module table

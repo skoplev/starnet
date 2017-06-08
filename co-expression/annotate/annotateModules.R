@@ -43,6 +43,45 @@ countModuleTissueStat = function(modules) {
 	return(out)
 }
 
+hyperGeometricModuleTest = function(env, genes) {
+	gene_bool = env$meta_genes$gene_symbol %in% genes
+	# sum(gene_bool)
+
+	# Aggregate gene symbols by module
+	genes_module = sapply(1:max(env$clust), function(k) {
+		idx = env$clust == k & gene_bool
+
+		if (sum(idx) == 0) {
+			return(c())
+		} else {
+			return(env$meta_genes[idx, ])
+		}
+	})
+
+	# Count number of found GWAS-associated genes
+	tab = data.frame(n_genes=sapply(genes_module, function(df) max(0, nrow(df))))
+	tab$genes = sapply(genes_module, function(df) paste(df$gene_symbol, collapse=";"))
+
+	# Hypergeometric test of CAD-associated transcripts in each module
+	m_mRNA = sum(env$meta_genes$gene_symbol %in% genes)
+	n_non_mRNA = sum(! env$meta_genes$gene_symbol %in% genes)
+
+	p_hyper = sapply(1:max(env$clust), function(k) {
+		module_size = between_stats$size[k]
+		module_mRNA = max(0, nrow(genes_module[[k]]))
+
+		p = 1 - phyper(module_mRNA, m_mRNA, n_non_mRNA, module_size)
+		return(p)
+	})
+
+	tab$pval = p_hyper
+	try({
+		tab$qvalue = qvalue(tab$pval)$qvalue
+	})
+
+	return(tab)
+}
+
 
 # Load cross-tissue modules
 # ------------------------------
@@ -225,47 +264,9 @@ cad_genes = paste(cad_genes, collapse="/")
 cad_genes = strsplit(cad_genes, "/")[[1]]
 cad_genes = unique(cad_genes)
 
-
-hyperGeometricModuleTest = function(env, genes) {
-	gene_bool = env$meta_genes$gene_symbol %in% genes
-	# sum(gene_bool)
-
-	# Aggregate gene symbols by module
-	genes_module = sapply(1:max(env$clust), function(k) {
-		idx = env$clust == k & gene_bool
-
-		if (sum(idx) == 0) {
-			return(c())
-		} else {
-			return(env$meta_genes[idx, ])
-		}
-	})
-
-	# Count number of found GWAS-associated genes
-	tab = data.frame(n_genes=sapply(genes_module, function(df) max(0, nrow(df))))
-	tab$genes = sapply(genes_module, function(df) paste(df$gene_symbol, collapse=";"))
-
-	# Hypergeometric test of CAD-associated transcripts in each module
-	m_mRNA = sum(env$meta_genes$gene_symbol %in% genes)
-	n_non_mRNA = sum(! env$meta_genes$gene_symbol %in% genes)
-
-	p_hyper = sapply(1:max(env$clust), function(k) {
-		module_size = between_stats$size[k]
-		module_mRNA = max(0, nrow(genes_module[[k]]))
-
-		p = 1 - phyper(module_mRNA, m_mRNA, n_non_mRNA, module_size)
-		return(p)
-	})
-
-	tab$pval = p_hyper
-	try({
-		tab$qvalue = qvalue(tab$pval)$qvalue
-	})
-
-	return(tab)
-}
-
 cad_tab = hyperGeometricModuleTest(between, cad_genes)
+
+colnames(cad_tab) = paste0("CAD_", colnames(cad_tab))
 
 
 # GWAS traits in general
@@ -293,8 +294,6 @@ trait = "Visceral fat"
 trait = "Phospholipid levels"
 idx = gwas[["DISEASE/TRAIT"]] == trait
 data.frame(gwas[idx, ])
-
-
 
 
 # Returns vector of gene symbols reported for GWAS trait.
@@ -350,6 +349,28 @@ gwas_tabs = lapply(gwas_genes, function(genes) hyperGeometricModuleTest(between,
 # gwas_enrich_pval = sapply(gwas_tabs, function(x) x$pval)
 gwas_enrich_pval = sapply(c(gwas_tabs, list("CAD"=cad_tab)), function(x) x$pval)
 rownames(gwas_enrich_pval) = 1:nrow(gwas_enrich_pval)
+
+
+# Secreted proteins
+# --------------------------------------------------
+
+secreted_proteins = fread(file.path(data_dir, "Uniprot/uniprot_human_secreted_proteins.tab"))
+
+secreted_proteins_symbols = strsplit(
+	paste(
+		secreted_proteins[["Gene names  (primary )"]],
+		collapse=";"),
+	";")[[1]]
+
+secreted_proteins_symbols = trimws(secreted_proteins_symbols)
+secreted_proteins_symbols = unique(secreted_proteins_symbols)
+secreted_proteins_symbols = secreted_proteins_symbols[secreted_proteins_symbols != ""]
+
+
+sec_tab = hyperGeometricModuleTest(between, secreted_proteins_symbols)
+
+colnames(sec_tab) = paste0("secreted_protein_", colnames(sec_tab))
+
 
 
 # CIBERSORT frequencies, association with eigengenes
@@ -810,8 +831,11 @@ mod_tab = data.frame(
 
 mod_tab = cbind(mod_tab, t(between_stats$tissue_counts))
 
-# CAD-associations
+# CAD-associations, enrichment
 mod_tab = cbind(mod_tab, cad_tab)
+
+# Secretion enrichment
+mod_tab = cbind(mod_tab, sec_tab)
 
 # eQTL
 mod_tab = cbind(mod_tab, eqtl_tab)
@@ -821,6 +845,7 @@ mod_tab = cbind(mod_tab, pheno_cor_pmat)
 
 # Endocrine factors
 mod_tab = cbind(mod_tab, endocrine_tab)
+
 
 # Top GO
 mod_tab = cbind(mod_tab, go_tab)
@@ -1031,7 +1056,105 @@ legend("topright", legend=rownames(between_stats$tissue_counts),
 )
 dev.off()
 
-# mod_tab = mod_tab[order(mod_tab$cad_pval), ]
+
+
+
+# Secreted protein enrichment
+
+
+cross_tissue = mod_tab$purity < 0.95  # Cross tissue definition
+# cross_tissue = mod_tab$purity < 0.99  # Cross tissue definition
+
+d = list(
+	"Cross-tissue"=-log10(sec_tab$secreted_protein_qvalue[cross_tissue]),
+	"Tissue-specific"=-log10(sec_tab$secreted_protein_qvalue[!cross_tissue])
+)
+
+d = lapply(d, function(x) {
+	x[is.infinite(x)] = 16
+	return(x)
+})
+
+boxplot(d)
+
+# wilcox.test(d[[1]], d[[2]])
+
+
+
+pdf("co-expression/plots/module_purity_tests.pdf", width=12)
+# Selectio criteria for testing cross-tissue fraction
+sel = list(
+	"Secreted"=sec_tab$secreted_protein_qvalue < 0.1,
+	"CAD"=cad_tab$CAD_qvalue < 0.1,
+
+	"SYNTAX"=mod_tab$pval_syntax_score < 0.05,
+	"DUKE"=mod_tab$pval_DUKE < 0.05,
+	"ndv"=mod_tab$pval_ndv < 0.05,
+	"lesions"=mod_tab$pval_lesions< 0.05,
+
+	"BMI"=mod_tab$pval_BMI < 0.05,
+	"HbA1c"=mod_tab$pval_HbA1c < 0.05,
+	"LDL"=mod_tab$pval_LDL < 0.05,
+	"HDL"=mod_tab$pval_HDL < 0.05,
+	"CRP"=mod_tab$pval_CRP < 0.05,
+	"p_chol"=mod_tab$pval_p_chol < 0.05
+)
+
+par(mfrow=c(2, floor(length(sel)/2)))
+
+for (i in 1:length(sel)) {
+
+	d = list(
+		"-"=(1-mod_tab$purity[!sel[[i]]]) * 100,
+		"+"=(1-mod_tab$purity[sel[[i]]]) * 100
+	)
+
+	boxplot(d,
+		outline=FALSE, ylab="Cross-tissue %",
+		main=paste0(
+			names(sel)[i],
+			" p=",
+			format(wilcox.test(d[[1]], d[[2]])$p.value, digits=4)
+		),
+		border="grey"
+	)
+	points(
+		jitter(rep(1, length(d[[1]])), 4),
+		d[[1]])
+	points(
+		jitter(rep(2, length(d[[2]])), 4),
+		d[[2]])
+
+}
+dev.off()
+
+
+pdf("co-expression/plots/CAD_secreted_enrichment.pdf", width=4, height=4.2)
+x = -log10(mod_tab$CAD_qvalue)
+y = -log10(mod_tab$secreted_protein_qvalue)
+
+x[is.infinite(x)] = 16
+y[is.infinite(y)] = 16
+
+mod_colors = rep("black", length(x))
+mod_colors[mod_tab$purity < 0.95] = brewer.pal(9, "Set1")[1]
+# mod_colors[mod_tab$purity < 0.99] = brewer.pal(9, "Set1")[1]
+
+
+plot(x, y,
+	xlab="CAD enrichment (-log10 q)",
+	ylab="Secreted enrichment (-log10 q)",
+	main=paste0("p=", format(cor.test(x, y)$p.value, digits=3)),
+	pch=16,
+	col=mod_colors
+)
+
+legend("topright",
+	legend=c("Tissue-specific", "Cross-tissue"),
+	pch=16,
+	col=c("black", brewer.pal(9, "Set1")[1])
+)
+dev.off()
 
 # plot(mod_tab$eQTL_gene_frac, type="l")
 

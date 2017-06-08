@@ -340,6 +340,7 @@ dev.off()
 # between$clust[j]
 
 
+# Scatter plot comparing the module enrichment of CAD GWAS and secreted proteins
 pdf("co-expression/plots/endocrine/CAD_secreted_enrichment.pdf", width=4, height=4.2)
 purity_thresh = 0.99  # cross-tissue definition
 

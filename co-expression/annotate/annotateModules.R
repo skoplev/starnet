@@ -247,24 +247,46 @@ write.table(between_go_enrich_filter$bestPTerms$CC$enrichment,
 # -----------------------------------------------------
 
 # Load Deloukas (2013) genes associated with CAD
-delou = read.table(file.path(data_dir, "Deloukas/ng.csv"),
+delou = read.table(file.path(data_dir, "GWAS/Deloukas/ng.csv"),
 	skip=1,
 	sep=",",
 	header=TRUE)
 
+# Nikpay GWAS table
+nikpay = read.table(file.path(data_dir, "GWAS/Nikpay/ng/Suppl Table 4-Table 1.csv"),
+	skip=3,
+	sep=",",
+	header=TRUE)
+nikpay$Locus.name
+
+# Howson GWAS table
+howson = read.table(file.path(data_dir, "GWAS/Howson/ng.csv"),
+	skip=3,
+	sep=",",
+	header=TRUE)
+howson = howson[1:25, ]  # trim table
+
+# Remove notes
+howson$Nearest.gene = gsub("\\(nsSNP\\)", "", howson$Nearest.gene)
+
+
+# Combine CAD nearest loci genes
 # Get CAD gene symbols from proximal loci
-cad_genes = delou$Loci_Nearest_Transcript
+cad_genes = c(
+	as.character(delou$Loci_Nearest_Transcript),
+	as.character(nikpay$Locus.name),
+	as.character(howson$Nearest.gene)
+)
 
-# cad_genes = delou$Loci_Nearest_Transcript[
-# 	delou$Definition. == "Known_CAD_hit" |
-# 	delou$Definition. == "novel_CAD_hit"
-# ]
-
-cad_genes = paste(cad_genes, collapse="/")
-cad_genes = strsplit(cad_genes, "/")[[1]]
+cad_genes = paste(cad_genes, collapse="/")  # single string
+cad_genes = strsplit(cad_genes, "[/,-]")[[1]]  # separate by / , or -
+cad_genes = trimws(cad_genes)
 cad_genes = unique(cad_genes)
+cad_genes = cad_genes[cad_genes != ""]
 
+# Test for enrichment
 cad_tab = hyperGeometricModuleTest(between, cad_genes)
+sum(cad_tab$qvalue < 0.1)
 
 colnames(cad_tab) = paste0("CAD_", colnames(cad_tab))
 
@@ -346,8 +368,10 @@ names(gwas_genes) = traits
 
 gwas_tabs = lapply(gwas_genes, function(genes) hyperGeometricModuleTest(between, genes))
 
-# gwas_enrich_pval = sapply(gwas_tabs, function(x) x$pval)
-gwas_enrich_pval = sapply(c(gwas_tabs, list("CAD"=cad_tab)), function(x) x$pval)
+gwas_enrich_pval = sapply(gwas_tabs, function(x) x$pval)
+gwas_enrich_pval = as.data.frame(gwas_enrich_pval)
+gwas_enrich_pval$CAD = cad_tab$CAD_pval
+
 rownames(gwas_enrich_pval) = 1:nrow(gwas_enrich_pval)
 
 
@@ -1084,8 +1108,8 @@ boxplot(d)
 pdf("co-expression/plots/module_purity_tests.pdf", width=12)
 # Selectio criteria for testing cross-tissue fraction
 sel = list(
-	"Secreted"=sec_tab$secreted_protein_qvalue < 0.1,
-	"CAD"=cad_tab$CAD_qvalue < 0.1,
+	"Secreted"=mod_tab$secreted_protein_qvalue < 0.1,
+	"CAD"=mod_tab$CAD_qvalue < 0.1,
 
 	"SYNTAX"=mod_tab$pval_syntax_score < 0.05,
 	"DUKE"=mod_tab$pval_DUKE < 0.05,
@@ -1129,32 +1153,6 @@ for (i in 1:length(sel)) {
 dev.off()
 
 
-pdf("co-expression/plots/CAD_secreted_enrichment.pdf", width=4, height=4.2)
-x = -log10(mod_tab$CAD_qvalue)
-y = -log10(mod_tab$secreted_protein_qvalue)
-
-x[is.infinite(x)] = 16
-y[is.infinite(y)] = 16
-
-mod_colors = rep("black", length(x))
-mod_colors[mod_tab$purity < 0.95] = brewer.pal(9, "Set1")[1]
-# mod_colors[mod_tab$purity < 0.99] = brewer.pal(9, "Set1")[1]
-
-
-plot(x, y,
-	xlab="CAD enrichment (-log10 q)",
-	ylab="Secreted enrichment (-log10 q)",
-	main=paste0("p=", format(cor.test(x, y)$p.value, digits=3)),
-	pch=16,
-	col=mod_colors
-)
-
-legend("topright",
-	legend=c("Tissue-specific", "Cross-tissue"),
-	pch=16,
-	col=c("black", brewer.pal(9, "Set1")[1])
-)
-dev.off()
 
 # plot(mod_tab$eQTL_gene_frac, type="l")
 

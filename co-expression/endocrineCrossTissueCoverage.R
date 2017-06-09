@@ -15,18 +15,25 @@ data_dir = "/Users/sk/DataProjects/cross-tissue"  # root of data directory
 setwd("/Users/sk/Google Drive/projects/cross-tissue")
 source("src/parse.R")
 
-# endocrine = fread("~/Google Drive/projects/STARNET-endocrine/data/endo_scores_large.csv")
 
-endocrine = fread("~/Google Drive/projects/STARNET-endocrine/data/endo_scores.csv")
+# Load cross-tissue modules
+# ------------------------------
+between = new.env()
+load(file.path(data_dir, "modules/between_within-cross-tissue.RData"),
+	between,
+	verbose=TRUE)
+
+# Parse module data
+between = parseModuleData(between)
 
 # Main module table
 mod_tab = fread("co-expression/tables/module_tab.csv")
 
+# Endocrine factors
+endocrine = fread("~/Google Drive/projects/STARNET-endocrine/data/endo_scores.csv")
 
-# Endocrine target enrichment
+# Load endocrine target enrichment
 endocrine_enrich = fread("co-expression/tables/endocrine_tab.csv")
-
-
 endocrine_enrich$endocrine_ids = paste(endocrine_enrich$endocrine_factor, endocrine_enrich$from_tissue, endocrine_enrich$target_tissue, sep="_")
 
 # Pick endocrine factor with highest coverage (first found)
@@ -34,10 +41,12 @@ endocrine_enrich$endocrine_ids = paste(endocrine_enrich$endocrine_factor, endocr
 
 # endocrine_enrich = endocrine_enrich[endocrine_enrich$module_coverage > 0.1, ]
 
-hist(endocrine_enrich$module_coverage, breaks=50)
+# hist(endocrine_enrich$module_coverage, breaks=50)
 
 # sum(endocrine_enrich$padj < 0.1)
 
+# Plots of endocrine target enrichment stratified by cross-tissue/tissue-specific modules
+# --------------------------------------------------------------------------
 d_sec_score = list(
 	"-"=endocrine_enrich$sec_score[!endocrine_enrich$endocrine_in_module],
 	"+"=endocrine_enrich$sec_score[endocrine_enrich$endocrine_in_module]
@@ -48,8 +57,6 @@ d_module_coverage = list(
 	"+"=endocrine_enrich$module_coverage[endocrine_enrich$endocrine_in_module]
 )
 
-
-# sapply(d, length)
 names(d_sec_score) = paste(names(d_sec_score), sapply(d_sec_score, length))
 names(d_module_coverage) = paste(names(d_module_coverage), sapply(d_module_coverage, length))
 
@@ -69,9 +76,9 @@ boxplot(d_module_coverage, outline=FALSE,
 dev.off()
 
 
+# Endocrines found in cross-tissue modules
 sub_endocrine_enrich = endocrine_enrich[endocrine_enrich$endocrine_in_module, ]
-
-sub_endocrine_enrich[order(sub_endocrine_enrichr$sec_score, decreasing=TRUE), ]
+sub_endocrine_enrich[order(sub_endocrine_enrich$sec_score, decreasing=TRUE), ]
 
 # Order by secretion score
 sub_endocrine_enrich = sub_endocrine_enrich[order(sub_endocrine_enrich$sec_score, decreasing=TRUE), ]
@@ -120,13 +127,48 @@ write_graph(g, "co-expression/plots/endocrine_tissue_graph.gml", format="gml")
 
 unique(sub_endocrine_enrich$endocrine_ids)
 
-n = 20
+# Top-20 endocrine scores
+colors = brewer.pal(9, "Set1")[-6]
+tissues = c("AOR", "BLOOD", "LIV", "MAM", "SKLM", "SF", "VAF")
+# levels(factor(endocrine_enrich$from_tissue))  # vector of tissues 
 
-barplot(sub_endocrine_enrich$sec_score[1:n],
-	names.arg=sub_endocrine_enrich$endocrine_factor[1:n],
-	las=2
+
+pdf("co-expression/plots/endocrine/endocrine_cross_tissue_ranking.pdf", width=6)
+idx = 1:20
+
+
+pdf("co-expression/plots/endocrine/endocrine_cross_tissue_ranking_MAM_not_AOR.pdf", width=8)
+idx = which(sub_endocrine_enrich$from_tissue != "AOR" & sub_endocrine_enrich$target_tissue == "MAM")
+
+
+# idx = which(sub_endocrine_enrich$from_tissue == "VAF" & sub_endocrine_enrich$target_tissue == "MAM")
+
+par(mfrow=c(2, 1))
+bar_col = rgb(0.4, 0.4, 0.4)
+barplot(sub_endocrine_enrich$sec_score[idx],
+	names.arg=paste0(sub_endocrine_enrich$endocrine_factor[idx], " (", sub_endocrine_enrich$module[idx], ")"),
+	ylab="Endocrine effect",
+	las=2,
+	col=bar_col,
+	border=bar_col
 	)
 
+sub_endocrine_enrich[idx, ]
+
+tissue_mat = sub_endocrine_enrich[idx, c("from_tissue", "target_tissue")]
+
+tissue_mat$from_tissue = factor(tissue_mat$from_tissue, levels=tissues)
+tissue_mat$target_tissue = factor(tissue_mat$target_tissue, levels=tissues)
+
+plot(1:length(idx), rep(1, length(idx)), col=colors[as.integer(tissue_mat$from_tissue)],
+	xlab="", ylab="",
+	bty="n",
+	cex=2.0,
+	pch=15)
+points(1:length(idx), rep(1.2, length(idx)), col=colors[as.integer(tissue_mat$target_tissue)],
+	cex=2.0,
+	pch=15)
+dev.off()
 
 
 
@@ -140,20 +182,6 @@ sub_endocrine_enrich[sub_endocrine_enrich$target_tissue == "AOR", ]
 sub_endocrine_enrich[sub_endocrine_enrich$target_tissue == "MAM", ]
 sub_endocrine_enrich[sub_endocrine_enrich$target_tissue == "BLOOD", ]
 
-# Load cross-tissue modules
-# ------------------------------
-between = new.env()
-load(file.path(data_dir, "modules/between_within-cross-tissue.RData"),
-	between,
-	verbose=TRUE)
-
-# Parse module data
-between = parseModuleData(between)
-
-
-# Load module annotations
-module_tab = fread("co-expression/tables/module_tab.csv")
-
 
 # Find modules of each endocrine factor
 # ----------------------------------
@@ -163,7 +191,7 @@ transcript_ids = paste(between$meta_genes$tissue, between$meta_genes$gene_symbol
 endocrine$clust = between$clust[match(endocrine_ids, transcript_ids)]
 
 # Add module purity to endocrine table
-endocrine$mod_purity = module_tab$purity[endocrine$clust]
+endocrine$mod_purity = mod_tab$purity[endocrine$clust]
 
 # Cross-tissue?
 endocrine$cross_tissue_10 = endocrine$mod_purity < 0.9
@@ -174,6 +202,12 @@ endocrine$cross_tissue_1 = endocrine$mod_purity < 0.99
 write.csv(endocrine[endocrine$clust == 98, ], "co-expression/plots/endocrines_mod98.csv")
 
 sec_score_thresh = 2
+
+sum(endocrine$sec_score > sec_score_thresh)
+unique(endocrine$endocrine_factor[endocrine$sec_score > sec_score_thresh])
+# unique(endocrine$from_tissue[endocrine$sec_score > sec_score_thresh])
+# unique(endocrine$target_tissue[endocrine$sec_score > sec_score_thresh])
+
 
 pdf("co-expression/plots/cross_tissue_endocrine.pdf", height=3.5, width=7)
 par(mfcol=c(1, 2),
@@ -294,22 +328,80 @@ for (i in 1:length(tissues)) {
 	}
 }
 
-df = pairwise_stats[[1]]
+save(pairwise_stats, file=file.path(data_dir, "R_workspaces/endocrineCrossTissueCoverage_pairwise_stats.RData"))
 
-par(mfrow=c(3, ceiling(length(pairwise_stats)/3)))
 
-for (i in 1:length(pairwise_stats)) {
-	df = pairwise_stats[[i]]
 
-	plot(df$cutoff, df$frac * 100,
-		type="l",
-		lwd=2,
-		ylim=c(0, 100),
-		main=paste0(t1, "-", t2),
-		ylab="Cross-tissue %",
-		xlab="> |r|")
+# Get all fractions, as matrix
+all_frac = sapply(pairwise_stats, function(stats) {
+	unlist(stats$frac)
+})
 
-}
+
+# Calculate mean fraction
+mean_frac = apply(all_frac, 1, mean, na.rm=TRUE)
+
+# Calculate 95% confidence intervals
+conf_int = apply(all_frac, 1, function(x) {
+	if (all(is.na(x))) {
+		return(c(NA, NA))
+	} else {
+		return(t.test(x)$conf.int)
+	}
+})
+conf_int = t(conf_int)
+
+conf_int[conf_int < 0] = 0
+
+conf_int[31, 1] = 0
+conf_int[31, 2] = 1
+
+
+
+# Plot of mean cross-tissue coverage
+pdf("co-expression/plots/cross-tissue-correlations.pdf", width=6, height=5)
+mid_r = 0.5
+tissue_col = brewer.pal(9, "Set1")[-6]
+conf_col = brewer.pal(9, "Pastel1")[2]
+
+plot(cutoffs, mean_frac, ylim=c(0, 1), type="n",
+	xlab="Edge criteria (> |r|)",
+	ylab="Cross-tissue interactions"
+)
+
+# 95% confidence interval area
+polygon(c(cutoffs, rev(cutoffs)), c(conf_int[, 1], rev(conf_int[, 2])),
+	col=conf_col,
+	border=NA)
+
+
+lines(cutoffs, mean_frac)
+
+mid = which(cutoffs == mid_r)
+mid_points = sapply(pairwise_stats, function(stats) stats$frac[mid])
+
+t1 = sapply(strsplit(names(mid_points), "_"), function(x) x[1])
+t2 = sapply(strsplit(names(mid_points), "_"), function(x) x[2])
+
+abline(v=mid_r, col="grey", lty=3)
+
+x_jit = jitter(rep(mid_r, length(pairwise_stats)), 3)
+points(x_jit, mid_points,
+	pch=16,
+	col=tissue_col[match(t1, tissues)])
+
+points(x_jit, mid_points,
+	# pch=16,
+	col=tissue_col[match(t2, tissues)])
+
+text(x_jit, mid_points,
+	labels=names(mid_points),
+	pos=4,
+	cex=0.3)
+
+legend("topleft", legend=c("95% CI", "Mean", "Tissue A", "Tissue B"), pch=c(15, 3, 16, 1), col=c(conf_col, "black", "black", "black"))
+dev.off()
+
 
 
 pdf("co-expression/plots/cross-tissue-edges-in-modules.pdf", width=5, height=8)

@@ -1,3 +1,5 @@
+# First approach for analysing cross-tissue modules and endocrine factors
+#
 rm(list=ls())
 
 library(WGCNA)
@@ -478,43 +480,43 @@ dev.off()
 
 
 
-sel = mod_tab$purity < 0.99
+# sel = mod_tab$purity < 0.99
+
+# # d = list(
+# # 	"-"=-log10(mod_tab$secreted_protein_qvalue)[sel],
+# # 	"+"=-log10(mod_tab$secreted_protein_qvalue)[!sel]
+# # )
 
 # d = list(
-# 	"-"=-log10(mod_tab$secreted_protein_qvalue)[sel],
-# 	"+"=-log10(mod_tab$secreted_protein_qvalue)[!sel]
-# )
-
-d = list(
-	"-"=-log10(mod_tab$CAD_qvalue)[!sel],
-	"+"=-log10(mod_tab$CAD_qvalue)[sel]
-)
-
-
-# d = list(
-# 	"-"=-log10(mod_tab$CAD_pval)[sel],
-# 	"+"=-log10(mod_tab$CAD_pval)[!sel]
+# 	"-"=-log10(mod_tab$CAD_qvalue)[!sel],
+# 	"+"=-log10(mod_tab$CAD_qvalue)[sel]
 # )
 
 
-# plot(density(d[[1]]))
-# lines(density(d[[2]]), col="red")
-
-d = lapply(d, function(x) {
-	x[x > 10] = 10
-	return(x)
-})
-
-sapply(d, length)
-
-boxplot(d)
-wilcox.test(d[[1]], d[[2]])
+# # d = list(
+# # 	"-"=-log10(mod_tab$CAD_pval)[sel],
+# # 	"+"=-log10(mod_tab$CAD_pval)[!sel]
+# # )
 
 
+# # plot(density(d[[1]]))
+# # lines(density(d[[2]]), col="red")
 
-sel = list(
-	"Secreted"=mod_tab$secreted_protein_qvalue < 0.1,
-	"CAD"=mod_tab$CAD_qvalue < 0.1
-)
+# d = lapply(d, function(x) {
+# 	x[x > 10] = 10
+# 	return(x)
+# })
+
+# sapply(d, length)
+
+# boxplot(d)
+# wilcox.test(d[[1]], d[[2]])
+
+
+
+# sel = list(
+# 	"Secreted"=mod_tab$secreted_protein_qvalue < 0.1,
+# 	"CAD"=mod_tab$CAD_qvalue < 0.1
+# )
 
 

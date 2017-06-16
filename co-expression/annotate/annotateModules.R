@@ -375,6 +375,22 @@ gwas_enrich_pval$CAD = cad_tab$CAD_pval
 rownames(gwas_enrich_pval) = 1:nrow(gwas_enrich_pval)
 
 
+"Phospholipid levels (plasma)",
+"Glucose homeostasis traits",
+
+for (trait in names(gwas_genes)) {
+
+}
+
+gwas_tabs_comb = lapply(1:length(gwas_tabs), function(i) {
+	tab = gwas_tabs[[i]]
+	colnames(tab) = paste0(names(gwas_tabs[i]), "_", colnames(tab))
+	return(tab)
+})
+gwas_tabs_comb = Reduce(cbind, gwas_tabs_comb)
+
+
+
 # Secreted proteins
 # --------------------------------------------------
 
@@ -600,12 +616,18 @@ targets_endocrine_enrich = lapply(1:max(between$clust), function(k) {
 	return(target_sub)
 })
 
-# targets_endocrine_enrich = Reduce(rbind, targets_endocrine_enrich)
 targets_endocrine_enrich = rbindlist(targets_endocrine_enrich)
 
-write.table(targets_endocrine_enrich, "co-expression/tables/endocrine_tab.csv", sep=",",
+write.table(targets_endocrine_enrich,
+	"co-expression/tables/endocrine_tab.csv",
+	sep=",",
 	row.names=FALSE,
 	quote=FALSE)
+
+write.table(targets_endocrine_enrich[targets_endocrine_enrich$endocrine_in_module, ],
+	"co-expression/tables/endocrine_tab_in_module.csv",
+	sep=",",
+	row.names=FALSE)
 
 # Make string of top-5 highest coverage
 endocrine_ids = paste0(targets_endocrine_enrich$from_tissue, "_", targets_endocrine_enrich$endocrine_factor)

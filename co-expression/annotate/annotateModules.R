@@ -246,43 +246,7 @@ write.table(between_go_enrich_filter$bestPTerms$CC$enrichment,
 # Find CAD-associated genes in cross-tissue modules
 # -----------------------------------------------------
 
-# Load Deloukas (2013) genes associated with CAD
-delou = read.table(file.path(data_dir, "GWAS/Deloukas/ng.csv"),
-	skip=1,
-	sep=",",
-	header=TRUE)
-
-# Nikpay GWAS table
-nikpay = read.table(file.path(data_dir, "GWAS/Nikpay/ng/Suppl Table 4-Table 1.csv"),
-	skip=3,
-	sep=",",
-	header=TRUE)
-nikpay$Locus.name
-
-# Howson GWAS table
-howson = read.table(file.path(data_dir, "GWAS/Howson/ng.csv"),
-	skip=3,
-	sep=",",
-	header=TRUE)
-howson = howson[1:25, ]  # trim table
-
-# Remove notes
-howson$Nearest.gene = gsub("\\(nsSNP\\)", "", howson$Nearest.gene)
-
-
-# Combine CAD nearest loci genes
-# Get CAD gene symbols from proximal loci
-cad_genes = c(
-	as.character(delou$Loci_Nearest_Transcript),
-	as.character(nikpay$Locus.name),
-	as.character(howson$Nearest.gene)
-)
-
-cad_genes = paste(cad_genes, collapse="/")  # single string
-cad_genes = strsplit(cad_genes, "[/,-]")[[1]]  # separate by / , or -
-cad_genes = trimws(cad_genes)
-cad_genes = unique(cad_genes)
-cad_genes = cad_genes[cad_genes != ""]
+cad_genes = getCADGenes(data_dir)
 
 # Test for enrichment
 cad_tab = hyperGeometricModuleTest(between, cad_genes)
@@ -306,38 +270,26 @@ write.csv(rev(gwas_counts), "GWAS_counts.csv", row.names=FALSE)
 gwas_counts[grep("diabetes", gwas_traits, ignore.case=TRUE)]
 gwas_counts[grep("lipid", gwas_traits, ignore.case=TRUE)]
 
+gwas_counts[grep("BMI", gwas_traits, ignore.case=TRUE)]
+gwas_counts[grep("body", gwas_traits, ignore.case=TRUE)]
+gwas_counts[grep("waist", gwas_traits, ignore.case=TRUE)]
+
 gwas_counts[grep("LDL", gwas_traits, ignore.case=TRUE)]
 gwas_counts[grep("HDL", gwas_traits, ignore.case=TRUE)]
 gwas_counts[grep("cholesterol", gwas_traits, ignore.case=TRUE)]
+gwas_counts[grep("triglyceride", gwas_traits, ignore.case=TRUE)]
 gwas_counts[grep("glucose", gwas_traits, ignore.case=TRUE)]
 gwas_counts[grep("insulin", gwas_traits, ignore.case=TRUE)]
 
+# gwas[gwas[["FIRST AUTHOR"]] == "Shungin D", ]
+# table(gwas[gwas[["FIRST AUTHOR"]] == "Shungin D", ][["DISEASE/TRAIT"]])
+
 trait = "Visceral fat"
 trait = "Phospholipid levels"
+trait = "Glucose homeostasis traits"
 idx = gwas[["DISEASE/TRAIT"]] == trait
 data.frame(gwas[idx, ])
 
-
-# Returns vector of gene symbols reported for GWAS trait.
-# gwas is a data.table from EBI GWAS catalog
-getGWAS = function(gwas, trait) {
-	exclude_genes = c("intergenic")
-
-	idx = gwas[["DISEASE/TRAIT"]] == trait
-	message("Found GWAS: ", sum(idx))
-
-	# Find associated genes
-	gwas_genes = trimws(
-		unlist(
-			strsplit(gwas[["REPORTED GENE(S)"]][idx], ",")
-		)
-	)
-	gwas_genes = unique(gwas_genes)
-
-	gwas_genes = gwas_genes[!gwas_genes %in% exclude_genes]
-
-	return(gwas_genes)
-}
 
 # GWAS traits/phenotypes to include in analysis
 traits = c(
@@ -347,10 +299,13 @@ traits = c(
 	"LDL cholesterol",
 	"HDL cholesterol",
 	"Cholesterol, total",
+	"Waist-to-hip ratio adjusted for body mass index",
 	"Glucose homeostasis traits",
-	# "Fasting plasma glucose",
-	# "Fasting glucose-related traits",
+	"Triglycerides",
+	"Fasting glucose-related traits",
 	"Lipid traits",
+	"Body mass index",
+	"Fasting plasma glucose",
 	"Blood pressure",
 	"Systolic blood pressure",
 	"Diastolic blood pressure",
@@ -374,22 +329,13 @@ gwas_enrich_pval$CAD = cad_tab$CAD_pval
 
 rownames(gwas_enrich_pval) = 1:nrow(gwas_enrich_pval)
 
-
-"Phospholipid levels (plasma)",
-"Glucose homeostasis traits",
-
-for (trait in names(gwas_genes)) {
-
-}
-
+# Combine into single data frame
 gwas_tabs_comb = lapply(1:length(gwas_tabs), function(i) {
 	tab = gwas_tabs[[i]]
 	colnames(tab) = paste0(names(gwas_tabs[i]), "_", colnames(tab))
 	return(tab)
 })
 gwas_tabs_comb = Reduce(cbind, gwas_tabs_comb)
-
-
 
 # Secreted proteins
 # --------------------------------------------------
@@ -867,7 +813,7 @@ kd_tab = data.frame(top_key_drivers=top_key_drivers,
 	)
 
 
-# Combined module table
+# Combine module tables
 # -----------------------------------------------
 
 # general statistics
@@ -900,6 +846,9 @@ mod_tab = cbind(mod_tab, go_tab)
 mod_tab = cbind(mod_tab, ciber_tab)
 
 mod_tab = cbind(mod_tab, kd_tab)
+
+# Other GWAS enrichment results
+mod_tab = cbind(mod_tab, gwas_tabs_comb)
 
 write.table(mod_tab, "co-expression/tables/module_tab.csv", sep=",", col.names=NA)
 

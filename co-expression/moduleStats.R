@@ -8,6 +8,7 @@ library(reshape2)
 library(RColorBrewer)
 library(gplots)
 library(magicaxis)
+library(data.table)
 
 data_dir = "/Users/sk/DataProjects/cross-tissue"  # root of data directory
 setwd("/Users/sk/Google Drive/projects/cross-tissue")
@@ -21,9 +22,19 @@ load(file.path(data_dir, "modules/between_within-cross-tissue.RData"), verbose=T
 
 # tissue_col = brewer.pal(12, "Set3")
 # tissue_col = brewer.pal(9, "Pastel1")
+# tissue_col = brewer.pal(9, "Set1")[-6]
+# tissue_col = brewer.pal(9, "Set1")[-6]
+
+tissues = c("AOR", "BLOOD", "SKLM", "VAF", "MAM", "LIV",  "SF")
 tissue_col = brewer.pal(9, "Set1")[-6]
 
+# Reorder colors to match new scheme
+tissue_col = tissue_col[match(unique(meta_genes$tissue), tissues)]
+
+
 modules = as.integer(factor(bwnet$colors))  # the modules detected
+
+mod_tab = fread("co-expression/tables/module_tab.csv")
 
 
 # Calculate module frequency statistics
@@ -43,6 +54,8 @@ module_tissue_comp = lapply(1:length(unique(modules)), function(i) {
 })
 
 block_tissue = countMat(block_tissue_comp)
+# Reorder  colors
+# block_tissue = block_tissue[match(rownames(block_tissue), tissues), ]
 
 module_tissue = countMat(module_tissue_comp)
 # module_tissue = module_tissue[, apply(module_tissue, 2, sum) < 500]
@@ -61,22 +74,24 @@ hc = hclust(dist(t(module_tissue_freq)))
 
 min_entro = 0.1
 exclude = module_size > 5000
-sel_modules = tissue_entropy > min_entro & !exclude
+# sel_modules = tissue_entropy > min_entro & !exclude
+sel_modules = mod_tab$purity < 0.95 & !exclude
 
-sum(tissue_entropy > min_entro)
 
 # Hierarcical cluster of tissue frequencies for all modules
 # Used to organize barplots
 hc_sel = hclust(dist(t(module_tissue_freq[,sel_modules])))
 
 
-# svg("co-expression/plots/cross-tissue-overview2.svg")
-pdf("co-expression/plots/cross-tissue-overview2.pdf")
+pdf("co-expression/plots/cross-tissue-overview3.pdf")
 par(mfcol=c(2, 2), lwd=1.0)
 # plot(density(tissue_entropy), main="Module tissue entropy")  # not used
-plot(density(tissue_entropy), xlim=c(0, 1), main="Module tissue entropy")  # not used
+# plot(density(tissue_entropy), xlim=c(0, 1), main="Module tissue entropy")  # not used
+plot(density(1 - mod_tab$purity), xlim=c(0, 1),
+	main="Cross-tissue fraction")
 
-abline(v=min_entro, col="grey", lty=3)
+# abline(v=min_entro, col="grey", lty=3)
+abline(v=0.05, col="grey", lty=3)
 
 # WCGNA block tissue composition
 barplot(block_tissue, col=tissue_col,
@@ -87,10 +102,11 @@ barplot(block_tissue, col=tissue_col,
 # Plot of tissue entropy and size
 mod_cols = rep("black", length(tissue_entropy))
 mod_cols[sel_modules] = "red"
-magplot(tissue_entropy, log10(module_size),
+# magplot(tissue_entropy, log10(module_size),
+magplot(1 - mod_tab$purity, log10(module_size),
 	col=mod_cols,
 	main="Cross-tissue modules",
-	xlab="Tissue entropy",
+	xlab="Cross-tissue fraction",
 	ylab="Genes",
 	unlog="y"
 )
@@ -111,8 +127,10 @@ barplot(cross_tissue_modules,
 	border=NA, space=0
 )
 legend("topright", legend=rownames(block_tissue),
-	pch=22,
-	pt.bg=tissue_col,
+	# pch=22,
+	pch=15,
+	# pt.bg=tissue_col,
+	col=tissue_col,
 	cex=0.7
 )
 dev.off()

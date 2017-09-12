@@ -37,3 +37,42 @@ enrichmentGO = function(modules) {
 
 	return(go_enrich)
 }
+
+hyperGeometricModuleTest = function(env, genes) {
+	gene_bool = env$meta_genes$gene_symbol %in% genes
+	# sum(gene_bool)
+
+	# Aggregate gene symbols by module
+	genes_module = sapply(1:max(env$clust), function(k) {
+		idx = env$clust == k & gene_bool
+
+		if (sum(idx) == 0) {
+			return(c())
+		} else {
+			return(env$meta_genes[idx, ])
+		}
+	})
+
+	# Count number of found GWAS-associated genes
+	tab = data.frame(n_genes=sapply(genes_module, function(df) max(0, nrow(df))))
+	tab$genes = sapply(genes_module, function(df) paste(df$gene_symbol, collapse=";"))
+
+	# Hypergeometric test of CAD-associated transcripts in each module
+	m_mRNA = sum(env$meta_genes$gene_symbol %in% genes)
+	n_non_mRNA = sum(! env$meta_genes$gene_symbol %in% genes)
+
+	p_hyper = sapply(1:max(env$clust), function(k) {
+		module_size = between_stats$size[k]
+		module_mRNA = max(0, nrow(genes_module[[k]]))
+
+		p = 1 - phyper(module_mRNA, m_mRNA, n_non_mRNA, module_size)
+		return(p)
+	})
+
+	tab$pval = p_hyper
+	try({
+		tab$qvalue = qvalue(tab$pval)$qvalue
+	})
+
+	return(tab)
+}

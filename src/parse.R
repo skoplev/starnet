@@ -183,3 +183,66 @@ parseCibersortFiles = function(freq_files, data_dir) {
 	return(ciber_freq)
 }
 
+# Returns vector of gene symbols reported for GWAS trait.
+# gwas is a data.table from EBI GWAS catalog
+getGWAS = function(gwas, trait) {
+	exclude_genes = c("intergenic")
+
+	idx = gwas[["DISEASE/TRAIT"]] == trait
+	message("Found GWAS: ", sum(idx))
+
+	# Find associated genes
+	gwas_genes = trimws(
+		unlist(
+			strsplit(gwas[["REPORTED GENE(S)"]][idx], ",")
+		)
+	)
+	gwas_genes = unique(gwas_genes)
+
+	gwas_genes = gwas_genes[!gwas_genes %in% exclude_genes]
+
+	return(gwas_genes)
+}
+
+
+getCADGenes = function(data_dir) {
+	# Load Deloukas (2013) genes associated with CAD
+	delou = read.table(file.path(data_dir, "GWAS/Deloukas/ng.csv"),
+		skip=1,
+		sep=",",
+		header=TRUE)
+
+	# Nikpay GWAS table
+	nikpay = read.table(file.path(data_dir, "GWAS/Nikpay/ng/Suppl Table 4-Table 1.csv"),
+		skip=3,
+		sep=",",
+		header=TRUE)
+	nikpay$Locus.name
+
+	# Howson GWAS table
+	howson = read.table(file.path(data_dir, "GWAS/Howson/ng.csv"),
+		skip=3,
+		sep=",",
+		header=TRUE)
+	howson = howson[1:25, ]  # trim table
+
+	# Remove notes
+	howson$Nearest.gene = gsub("\\(nsSNP\\)", "", howson$Nearest.gene)
+
+
+	# Combine CAD nearest loci genes
+	# Get CAD gene symbols from proximal loci
+	cad_genes = c(
+		as.character(delou$Loci_Nearest_Transcript),
+		as.character(nikpay$Locus.name),
+		as.character(howson$Nearest.gene)
+	)
+
+	cad_genes = paste(cad_genes, collapse="/")  # single string
+	cad_genes = strsplit(cad_genes, "[/,-]")[[1]]  # separate by / , or -
+	cad_genes = trimws(cad_genes)
+	cad_genes = unique(cad_genes)
+	cad_genes = cad_genes[cad_genes != ""]
+
+	return(cad_genes)
+}

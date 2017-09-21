@@ -39,6 +39,8 @@ enrichmentGO = function(modules) {
 }
 
 hyperGeometricModuleTest = function(env, genes) {
+	require(qvalue)
+	mod_stats = countModuleTissueStat(env)
 	gene_bool = env$meta_genes$gene_symbol %in% genes
 	# sum(gene_bool)
 
@@ -62,7 +64,7 @@ hyperGeometricModuleTest = function(env, genes) {
 	n_non_mRNA = sum(! env$meta_genes$gene_symbol %in% genes)
 
 	p_hyper = sapply(1:max(env$clust), function(k) {
-		module_size = between_stats$size[k]
+		module_size = mod_stats$size[k]
 		module_mRNA = max(0, nrow(genes_module[[k]]))
 
 		p = 1 - phyper(module_mRNA, m_mRNA, n_non_mRNA, module_size)

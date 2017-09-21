@@ -41,7 +41,7 @@ variables = cbind(
 
 bn = fges(variables, maxDegree=100)  # Fast-greedy equivalence search
 
-g = graph_from_graphnel(bn$graphNEL)
+g = graph.from.graphNEL(bn$graphNEL)
 
 epsilon = 10^-30  # small number
 

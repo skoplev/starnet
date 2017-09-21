@@ -149,6 +149,25 @@ parseModuleData = function(mod_env)  {
 	return(mod_env)
 }
 
+countModuleTissueStat = function(modules) {
+
+	out = list()
+
+	out$tissue_counts = sapply(1:max(modules$clust), function(cl) {
+		table(modules$meta_genes$tissue[modules$clust == cl])
+	})
+
+	out$purity = apply(out$tissue_counts, 2, max) / apply(out$tissue_counts, 2, sum)
+
+	out$n_tissues = apply(out$tissue_counts, 2, function(col) {
+		sum(col > 0)
+	})
+
+	out$size = apply(out$tissue_counts, 2, sum)
+
+	return(out)
+}
+
 
 
 parseCibersortFiles = function(freq_files, data_dir) {

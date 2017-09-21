@@ -63,6 +63,26 @@ if (!all(meta_genes$transcript_id == between$meta_genes$transcript_id)) {
 	stop("Transcript mismatch")
 }
 
+# Load Bayesian supernetwork
+library(igraph)
+
+# Load directed network
+netw = new.env()
+load("~/DataProjects/cross-tissue/R_workspaces/BayesNet2.RData", netw, verbose=TRUE)
+
+idx = CT_idx | TS_idx
+cmat_all = cor(t(emat[idx, ]), between$bwnet$eigengenes,
+	use="pairwise.complete.obs")
+
+rownames(cmat_all) = paste0(between$meta_genes$tissue, ":", between$meta_genes$gene_symbol)[idx]
+
+
+# Find module of each endocrine factor
+endocrine_module = between$clust[idx]
+
+g = igraph.from.graphNEL(netw$bn$graphNEL)
+edge_list = as_edgelist(g)
+
 
 # Secretory proteins in cross-tissue modules
 # --------------------------------------
@@ -80,6 +100,7 @@ min_mod_size = 5000
 cross_tissue_modules = which(mod_tab$purity < 1 - cross_tissue_frac_defn & mod_tab$mod_size < min_mod_size)
 tissue_specific_modules = which(mod_tab$purity >= 1 - cross_tissue_frac_defn & mod_tab$mod_size < min_mod_size)
 
+# Find endocrines in CT or TS modules
 CT_idx = between$meta_genes$gene_symbol %in% sec_prots & between$clust %in% cross_tissue_modules
 TS_idx = between$meta_genes$gene_symbol %in% sec_prots & between$clust %in% tissue_specific_modules
 
@@ -88,46 +109,23 @@ TS_idx = between$meta_genes$gene_symbol %in% sec_prots & between$clust %in% tiss
 
 # table(between$meta_genes$tissue[CT_idx])
 
-# library("Hmisc")
+library("Hmisc")  # for matrix of p-values
 
 # Endocrine-eigengene correlations
 cmat = cor(t(emat[CT_idx, ]), between$bwnet$eigengenes,
 	use="pairwise.complete.obs")
 
+# Calculate matrix of p-values for endocrine-eigengene correlations.
+cmat_test = corAndPvalue(data.matrix(t(emat[CT_idx, ])), data.matrix(between$bwnet$eigengenes))
 
 
 cmat_ts = cor(t(emat[TS_idx, ]), between$bwnet$eigengenes,
 	use="pairwise.complete.obs")
 
-
-# Table for secreted proteins
-sec_info = data.frame(
-	tissue=between$meta_genes$tissue[CT_idx],
-	gene_symbol=between$meta_genes$gene_symbol[CT_idx],
-	clust=between$clust[CT_idx])
-sec_info$id = paste0(sec_info$tissue, ":", sec_info$gene_symbol)
-
-sec_info$cross_tissue = sec_info$clust %in% cross_tissue_modules
-
-table(sec_info$tissue)
-length(unique(sec_info$gene_symbol))
+# cmat_ts_test = rcorr(data.matrix(t(emat[TS_idx, ])), data.matrix(between$bwnet$eigengenes))
+cmat_ts_test = corAndPvalue(data.matrix(t(emat[TS_idx, ])), data.matrix(between$bwnet$eigengenes))
 
 
-
-CT_self = cbind(1:sum(CT_idx), between$clust[CT_idx])
-cmat_no_self = cmat
-cmat_no_self[CT_self] = NA
-
-tissue_count = mod_tab[, c("AOR", "BLOOD", "LIV", "MAM", "SKLM", "SF", "VAF")]
-
-# Primary tissue of each module
-primary_tissue = apply(tissue_count, 1, function(row) {
-	names(row)[which.max(row)]
-})
-
-TS_self = cbind(1:sum(TS_idx), between$clust[TS_idx])
-cmat_ts_no_self = cmat_ts
-cmat_ts_no_self[TS_self] = NA
 
 
 qqplotAnnot = function(x, y,
@@ -160,35 +158,35 @@ hist(cmat_ts[TS_self], xlim=c(-1, 1), breaks=50, col=brewer.pal(9, "Set1")[2],
 dev.off()
 
 
-# # Matches the cmat index for cross-tissue endocrines
-# bool_mat_CT = sapply(as.character(meta_genes$tissue[CT_idx]), function(tissue) {
-# 	return(primary_tissue != tissue)
-# })
-# bool_mat_CT = t(bool_mat_CT)
+# Matches the cmat index for cross-tissue endocrines
+bool_mat_CT = sapply(as.character(meta_genes$tissue[CT_idx]), function(tissue) {
+	return(primary_tissue != tissue)
+})
+bool_mat_CT = t(bool_mat_CT)
 
-# # array indices of endocrine-module associations where the endocrine is not the
-# # from the primary (most prevalent) tissue.
-# arr_ind_CT = which(bool_mat_CT, arr.ind=TRUE)
+# array indices of endocrine-module associations where the endocrine is not the
+# from the primary (most prevalent) tissue.
+arr_ind_CT = which(bool_mat_CT, arr.ind=TRUE)
 
-# # Only cross-tissue modules
-# arr_ind_CT = arr_ind_CT[arr_ind_CT[, 2] %in% tissue_specific_modules, ]
+# Only targeting tissue-specific modules
+arr_ind_CT = arr_ind_CT[arr_ind_CT[, 2] %in% tissue_specific_modules, ]
 
 
-# bool_mat_TS = sapply(as.character(meta_genes$tissue[TS_idx]), function(tissue) {
-# 	return(primary_tissue != tissue)
-# })
-# bool_mat_TS = t(bool_mat_TS)
+bool_mat_TS = sapply(as.character(meta_genes$tissue[TS_idx]), function(tissue) {
+	return(primary_tissue != tissue)
+})
+bool_mat_TS = t(bool_mat_TS)
 
-# # array indices of endocrine-module associations where the endocrine is not the
-# # from the primary (most prevalent) tissue.
-# arr_ind_TS = which(bool_mat_TS, arr.ind=TRUE)
+# array indices of endocrine-module associations where the endocrine is not the
+# from the primary (most prevalent) tissue.
+arr_ind_TS = which(bool_mat_TS, arr.ind=TRUE)
 
-# # Only cross-tissue modules
-# arr_ind_TS = arr_ind_TS[arr_ind_TS[, 2] %in% tissue_specific_modules, ]
+# Only cross-tissue modules
+arr_ind_TS = arr_ind_TS[arr_ind_TS[, 2] %in% tissue_specific_modules, ]
 
-# par(mfrow=c(2, 1))
-# hist(cmat[arr_ind_CT], breaks=50, xlim=c(-1, 1), main="Cross-tissue endocrines", xlab="Heterogenous, tissue-specific eigengene cor.")
-# hist(cmat_ts[arr_ind_TS], breaks=50, xlim=c(-1, 1), main="Tissue-specific endocrines")
+par(mfrow=c(2, 1))
+hist(cmat[arr_ind_CT], breaks=50, xlim=c(-1, 1), main="Cross-tissue endocrines", xlab="Heterogenous, tissue-specific eigengene cor.")
+hist(cmat_ts[arr_ind_TS], breaks=50, xlim=c(-1, 1), main="Tissue-specific endocrines")
 
 
 pdf("co-expression/plots/endocrine/eigengene_qqplots.pdf", width=10, height=5.5)
@@ -211,36 +209,217 @@ qqplotAnnot(
 )
 dev.off()
 
-wilcox.test(
+pdf("co-expression/plots/endocrine/eigengene_qqplots_abs.pdf", width=10, height=5.5)
+par(mfrow=c(1, 2))
+qqplotAnnot(
 	abs(cmat_ts[TS_self]),
-	abs(cmat[CT_self])
+	abs(cmat[CT_self]),
+	main="QQ-plot, self-module eigengene cor.",
+	xlab="Tissue-specific endocrines",
+	ylab="Cross-tissue endocrines"
 )
+abline(0, 1, col="red")
 
-wilcox.test(
+qqplotAnnot(
 	abs(cmat_ts[arr_ind_TS]),
-	abs(cmat[arr_ind_CT])
+	abs(cmat[arr_ind_CT]),
+	main="QQ-plot, TS eigengene cor., different tissue",
+	xlab="Tissue-specific endocrines",
+	ylab="Cross-tissue endocrines"
 )
+dev.off()
+
+
+pdf("co-expression/plots/endocrine/eigengene_qqplots_pvals.pdf", width=10, height=5.5)
+par(mfrow=c(1, 2))
+qqplotAnnot(
+	-log10(cmat_ts_test$p[TS_self]),
+	-log10(cmat_test$p[CT_self]),
+	main="QQ-plot, self-module eigengene cor.",
+	xlab="Tissue-specific endocrines (-log10 p)",
+	ylab="Cross-tissue endocrines (-log10 p)"
+)
+abline(0, 1, col="red")
+
+x = cmat_ts_test$p[arr_ind_TS]
+y = cmat_test$p[arr_ind_CT]
+qqplotAnnot(-log10(x), -log10(y),
+	main="QQ-plot, TS eigengene cor., different tissue",
+	xlab="Tissue-specific endocrines (-log10 p)",
+	ylab="Cross-tissue endocrines (-log10 p)"
+)
+dev.off()
+
+
+# wilcox.test(
+# 	abs(cmat_ts[TS_self]),
+# 	abs(cmat[CT_self])
+# )
+
+# wilcox.test(
+# 	abs(cmat_ts[arr_ind_TS]),
+# 	abs(cmat[arr_ind_CT])
+# )
+
+
+
+
+# Table for secreted proteins found in cross-tissue modules
+sec_info = data.frame(
+	tissue=between$meta_genes$tissue[CT_idx],
+	gene_symbol=between$meta_genes$gene_symbol[CT_idx],
+	clust=between$clust[CT_idx])
+sec_info$id = paste0(sec_info$tissue, ":", sec_info$gene_symbol)
+
+sec_info$cross_tissue = sec_info$clust %in% cross_tissue_modules
+
+table(sec_info$tissue)
+length(unique(sec_info$gene_symbol))
+
+
+
+# Correlation matrix indices for endocrines in the same cross-tissue module
+CT_self = cbind(1:sum(CT_idx), between$clust[CT_idx])
+cmat_no_self = cmat
+cmat_no_self[CT_self] = NA
+
+tissue_count = mod_tab[, c("AOR", "BLOOD", "LIV", "MAM", "SKLM", "SF", "VAF")]
+
+# Primary tissue of each module
+primary_tissue = apply(tissue_count, 1, function(row) {
+	names(row)[which.max(row)]
+})
+
+TS_self = cbind(1:sum(TS_idx), between$clust[TS_idx])
+cmat_ts_no_self = cmat_ts
+cmat_ts_no_self[TS_self] = NA
+
+
+# sec_info
+
+# Add eigengene correlations to secretory factor table
+sec_info$eigen_cor = cmat[CT_self]
+sec_info$eigen_cor_pval = cmat_test$p[CT_self]
+sum(p.adjust(sec_info$eigen_cor_pval) < 0.1)
+
+colnames(mod_tab)[1] = "clust"
+
+sec_info_modules = merge(sec_info,
+	mod_tab[,
+		c(
+			"clust",
+			"mod_size",
+			"AOR",
+			"BLOOD",
+			"LIV",
+			"MAM",
+			"SKLM",
+			"SF",
+			"VAF",
+			"pval_syntax_score",
+			"pval_ndv",
+			"pval_lesions",
+			"pval_DUKE",
+			"CAD_qvalue",
+			"Type 2 diabetes_qvalue",
+			"Lipid metabolism phenotypes_qvalue",
+			"LDL cholesterol_qvalue",
+			"HDL cholesterol_qvalue",
+			"Cholesterol, total_qvalue",
+			"Waist-to-hip ratio adjusted for body mass index_qvalue",
+			"Triglycerides_qvalue",
+			"Body mass index_qvalue",
+			"Fasting glucose-related traits_qvalue",
+			"Blood pressure_qvalue"
+		)
+	],
+	by="clust")
+
+# Order by association
+sec_info_modules = sec_info_modules[order(abs(sec_info_modules$eigen_cor), decreasing=TRUE), ]
+
+write.csv(sec_info_modules, "co-expression/tables/CT_endocrines.csv", row.names=FALSE)
+
+
+head(sec_info_modules, 10)
+head(sec_info_modules[sec_info_modules$CAD_qvalue < 0.05, ], 50)
+head(sec_info_modules[sec_info_modules$CAD_qvalue < 0.05, ], 100)
+
+# head(sec_info[endo_idx, ], 50)
+
+# # Test if correlation statistics are correct.
+# tissue = "VAF"
+# gene_symbol = "IGKV4-1"
+# mod = 107
+# # meta_genes
+
+# i = which(meta_genes$tissue == tissue & meta_genes$gene_symbol == gene_symbol)
+# j = mod
+
+# cor.test(t(emat[i, ]), between$bwnet$eigengenes[, j],
+# 	use="pairwise.complete.obs")
+
+# plot(t(emat[i, ]), between$bwnet$eigengenes[, j])
+
+# $
+
+
+ts_cor = cbind(arr_ind_CT, cmat[arr_ind_CT], cmat_test$p[arr_ind_CT])
+ts_cor = as.data.frame(ts_cor)
+colnames(ts_cor) = c("endocrine_idx", "target_clust", "ts_endo_cor", "ts_endo_cor_p")
+
+
+ts_cor$ts_endo_cor_p_adj = p.adjust(ts_cor$ts_endo_cor_p)
+# ts_cor$ts_endo_cor_p_adj = qvalue(ts_cor$ts_endo_cor_p)$qvalue
+
+ts_cor$target_tissue_primary = primary_tissue[ts_cor$target_clust]
+
+ts_cor = ts_cor[order(abs(ts_cor$ts_endo_cor), decreasing=TRUE), ]
+
+
+idx = ts_cor$ts_endo_cor_p_adj < 0.1
+ts_cor = ts_cor[idx, ]
+
+
+ts_cor_info = cbind(sec_info[ts_cor$endocrine_idx, c("tissue", "gene_symbol", "id", "clust")], ts_cor)
+
+ts_cor_info = ts_cor_info[, colnames(ts_cor_info) != "endocrine_idx"]
+
+# Is the module-module interaction identified by the Bayesian super network?
+ts_cor_info$supernetwork_edge = paste(ts_cor_info$clust, ts_cor_info$target_clust, sep="_") %in% paste(edge_list[, 1], edge_list[, 2], sep="_")
+
+write.csv(ts_cor_info, "co-expression/tables/CT_endocrines_TS_interactions.csv",
+	row.names=FALSE)
+
+
+# sum(ts_cor_info$supernetwork_edge)
+
+# ts_cor_info[ts_cor_info$target_clust == 98, ]
+# ts_cor_info[ts_cor_info$clust == 98, ]
+# ts_cor_info[ts_cor_info$clust == 145, ]
+# ts_cor_info[ts_cor_info$clust == 33, ]
+# ts_cor_info[ts_cor_info$clust == 28, ]
+
+# ts_cor_info[ts_cor_info$target_clust == 65, ]
+
+# ts_cor_info[ts_cor_info$target_tissue == "AOR", ]
+# ts_cor_info[ts_cor_info$target_tissue == "MAM", ]
+# ts_cor_info[ts_cor_info$supernetwork_edge, ]
+
+# head(ts_cor_info, 200)
+
+# barplot(sort(table(ts_cor_info$target_clust), decreasing=TRUE), las=2)
+
+# par(mar=c(10, 2, 2, 2))
+# barplot(sort(table(ts_cor_info$id), decreasing=TRUE)[1:20],
+# 	las=2)
+
+# table(ts_cor_info$target_clust)
+
 
 
 # Overlap with Bayesian network
-library(igraph)
-
-# Load directed network
-netw = new.env()
-load("~/DataProjects/cross-tissue/R_workspaces/BayesNet2.RData", netw, verbose=TRUE)
-
-idx = CT_idx | TS_idx
-cmat_all = cor(t(emat[idx, ]), between$bwnet$eigengenes,
-	use="pairwise.complete.obs")
-
-rownames(cmat_all) = paste0(between$meta_genes$tissue, ":", between$meta_genes$gene_symbol)[idx]
-
-
-# Find module of each endocrine factor
-endocrine_module = between$clust[idx]
-
-g = graph_from_graphnel(netw$bn$graphNEL)
-edge_list = as_edgelist(g)
+# ---------------------------------------------------
 
 # Get endocrine-module associations above threshold
 endocrine_edges = apply(edge_list, 1, function(edge) {
@@ -277,7 +456,17 @@ dev.off()
 # origin = 150
 # origin = 122
 # origin = 106
-origin = 33
+# origin = 116
+# origin = 33
+# origin = 20
+# origin = 188
+# origin = 159
+# origin = 58
+# origin = 152
+# origin = 118
+origin = 35
+
+
 
 pdf(paste0("co-expression/plots/endocrine/netwOverlap/origin_", origin, ".pdf"), width=20, height=12)
 edges = which(edge_list[, 1] == origin)

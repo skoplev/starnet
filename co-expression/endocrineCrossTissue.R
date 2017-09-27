@@ -5,6 +5,7 @@ library(data.table)
 library(WGCNA)
 library(gplots)
 library(RColorBrewer)
+library(igraph)
 
 library(devtools)  # for installing heatmap.3
 # Load heatmap.3
@@ -36,6 +37,14 @@ between = parseModuleData(between)
 # Main module table
 mod_tab = fread("co-expression/tables/module_tab.csv")
 
+tissue_count = mod_tab[, c("AOR", "BLOOD", "LIV", "MAM", "SKLM", "SF", "VAF")]
+
+# Primary tissue of each module
+primary_tissue = apply(tissue_count, 1, function(row) {
+	names(row)[which.max(row)]
+})
+
+
 secreted_proteins = fread(file.path(data_dir, "Uniprot/uniprot_human_secreted_proteins.tab"))
 
 sec_prots = secreted_proteins[["Gene names  (primary )"]]
@@ -64,24 +73,29 @@ if (!all(meta_genes$transcript_id == between$meta_genes$transcript_id)) {
 }
 
 # Load Bayesian supernetwork
-library(igraph)
 
 # Load directed network
 netw = new.env()
 load("~/DataProjects/cross-tissue/R_workspaces/BayesNet2.RData", netw, verbose=TRUE)
 
-idx = CT_idx | TS_idx
-cmat_all = cor(t(emat[idx, ]), between$bwnet$eigengenes,
-	use="pairwise.complete.obs")
-
-rownames(cmat_all) = paste0(between$meta_genes$tissue, ":", between$meta_genes$gene_symbol)[idx]
 
 
 # Find module of each endocrine factor
-endocrine_module = between$clust[idx]
+# endocrine_module = between$clust[idx]
 
 g = igraph.from.graphNEL(netw$bn$graphNEL)
 edge_list = as_edgelist(g)
+
+
+# # Calculate eigengenes of secreted proteins only, for each module
+# clust_sec = between$clust
+# clust_sec[!between$meta_genes$gene_symbol %in% sec_prots] = "grey"
+# clust_sec = as.character(clust_sec)
+
+# singleton_clusts = names(which(table(clust_sec) < 2))
+# clust_sec[clust_sec %in% singleton_clusts] = "grey "
+
+# # sec_eigengenes = moduleEigengenes(t(emat), clust_sec)  # memory error
 
 
 # Secretory proteins in cross-tissue modules
@@ -105,11 +119,15 @@ CT_idx = between$meta_genes$gene_symbol %in% sec_prots & between$clust %in% cros
 TS_idx = between$meta_genes$gene_symbol %in% sec_prots & between$clust %in% tissue_specific_modules
 
 
+idx = CT_idx | TS_idx
+cmat_all = cor(t(emat[idx, ]), between$bwnet$eigengenes,
+	use="pairwise.complete.obs")
+
+rownames(cmat_all) = paste0(between$meta_genes$tissue, ":", between$meta_genes$gene_symbol)[idx]
+
 
 
 # table(between$meta_genes$tissue[CT_idx])
-
-library("Hmisc")  # for matrix of p-values
 
 # Endocrine-eigengene correlations
 cmat = cor(t(emat[CT_idx, ]), between$bwnet$eigengenes,
@@ -126,6 +144,15 @@ cmat_ts = cor(t(emat[TS_idx, ]), between$bwnet$eigengenes,
 cmat_ts_test = corAndPvalue(data.matrix(t(emat[TS_idx, ])), data.matrix(between$bwnet$eigengenes))
 
 
+# Correlation matrix indices for endocrines in the same cross-tissue module
+CT_self = cbind(1:sum(CT_idx), between$clust[CT_idx])
+cmat_no_self = cmat
+cmat_no_self[CT_self] = NA
+
+
+TS_self = cbind(1:sum(TS_idx), between$clust[TS_idx])
+cmat_ts_no_self = cmat_ts
+cmat_ts_no_self[TS_self] = NA
 
 
 qqplotAnnot = function(x, y,
@@ -251,18 +278,6 @@ qqplotAnnot(-log10(x), -log10(y),
 dev.off()
 
 
-# wilcox.test(
-# 	abs(cmat_ts[TS_self]),
-# 	abs(cmat[CT_self])
-# )
-
-# wilcox.test(
-# 	abs(cmat_ts[arr_ind_TS]),
-# 	abs(cmat[arr_ind_CT])
-# )
-
-
-
 
 # Table for secreted proteins found in cross-tissue modules
 sec_info = data.frame(
@@ -272,30 +287,6 @@ sec_info = data.frame(
 sec_info$id = paste0(sec_info$tissue, ":", sec_info$gene_symbol)
 
 sec_info$cross_tissue = sec_info$clust %in% cross_tissue_modules
-
-table(sec_info$tissue)
-length(unique(sec_info$gene_symbol))
-
-
-
-# Correlation matrix indices for endocrines in the same cross-tissue module
-CT_self = cbind(1:sum(CT_idx), between$clust[CT_idx])
-cmat_no_self = cmat
-cmat_no_self[CT_self] = NA
-
-tissue_count = mod_tab[, c("AOR", "BLOOD", "LIV", "MAM", "SKLM", "SF", "VAF")]
-
-# Primary tissue of each module
-primary_tissue = apply(tissue_count, 1, function(row) {
-	names(row)[which.max(row)]
-})
-
-TS_self = cbind(1:sum(TS_idx), between$clust[TS_idx])
-cmat_ts_no_self = cmat_ts
-cmat_ts_no_self[TS_self] = NA
-
-
-# sec_info
 
 # Add eigengene correlations to secretory factor table
 sec_info$eigen_cor = cmat[CT_self]
@@ -341,9 +332,9 @@ sec_info_modules = sec_info_modules[order(abs(sec_info_modules$eigen_cor), decre
 write.csv(sec_info_modules, "co-expression/tables/CT_endocrines.csv", row.names=FALSE)
 
 
-head(sec_info_modules, 10)
-head(sec_info_modules[sec_info_modules$CAD_qvalue < 0.05, ], 50)
-head(sec_info_modules[sec_info_modules$CAD_qvalue < 0.05, ], 100)
+# head(sec_info_modules, 10)
+# head(sec_info_modules[sec_info_modules$CAD_qvalue < 0.05, ], 50)
+# head(sec_info_modules[sec_info_modules$CAD_qvalue < 0.05, ], 100)
 
 # head(sec_info[endo_idx, ], 50)
 
@@ -364,23 +355,27 @@ head(sec_info_modules[sec_info_modules$CAD_qvalue < 0.05, ], 100)
 # $
 
 
+# Cross-tissue endocrines to tissue-specific modules table
+# --------------------------------------------------------------------
+fdr = 0.2
 ts_cor = cbind(arr_ind_CT, cmat[arr_ind_CT], cmat_test$p[arr_ind_CT])
 ts_cor = as.data.frame(ts_cor)
 colnames(ts_cor) = c("endocrine_idx", "target_clust", "ts_endo_cor", "ts_endo_cor_p")
 
 
+# Benjamini-Hochberg correction
 ts_cor$ts_endo_cor_p_adj = p.adjust(ts_cor$ts_endo_cor_p)
-# ts_cor$ts_endo_cor_p_adj = qvalue(ts_cor$ts_endo_cor_p)$qvalue
 
 ts_cor$target_tissue_primary = primary_tissue[ts_cor$target_clust]
 
 ts_cor = ts_cor[order(abs(ts_cor$ts_endo_cor), decreasing=TRUE), ]
 
 
-idx = ts_cor$ts_endo_cor_p_adj < 0.1
+idx = ts_cor$ts_endo_cor_p_adj < fdr
 ts_cor = ts_cor[idx, ]
 
 
+# Add information abount endocrine factors
 ts_cor_info = cbind(sec_info[ts_cor$endocrine_idx, c("tissue", "gene_symbol", "id", "clust")], ts_cor)
 
 ts_cor_info = ts_cor_info[, colnames(ts_cor_info) != "endocrine_idx"]
@@ -388,8 +383,150 @@ ts_cor_info = ts_cor_info[, colnames(ts_cor_info) != "endocrine_idx"]
 # Is the module-module interaction identified by the Bayesian super network?
 ts_cor_info$supernetwork_edge = paste(ts_cor_info$clust, ts_cor_info$target_clust, sep="_") %in% paste(edge_list[, 1], edge_list[, 2], sep="_")
 
+# Add information about tissue-specific modules
+
+
+# Pairs of GWAS and phenotypes:
+# CAD + angiographic score
+# LDL
+# HDL
+# Cholesterol
+# Fasting plasma glucose + (bl glucose, HbA1c)
+# BMI
+
+
+# sum(mod_tab$CAD_qvalue < 0.1)
+
+# Combine angiographic p-values for correlations
+angiographic_pval = apply(
+	mod_tab[,
+		c("pval_syntax_score",
+			"pval_ndv",
+			"pval_lesions",
+			"pval_DUKE")
+	],
+	1,
+	min
+)
+
+# library(metap)
+# angiographic_pval2 = apply(
+# 	mod_tab[,
+# 		c("pval_syntax_score",
+# 			"pval_ndv",
+# 			"pval_lesions",
+# 			"pval_DUKE")
+# 	],
+# 	1,
+# 	# function(p) wilkinsonp(p, r=2)$p  # Wilkinson
+# 	function(p) sumz(p)$p  # Stouffer
+# 	# function(p) sumlog(p)$p  # Fisher's
+# )
+
+# sum(p.adjust(angiographic_pval2) < 0.2)
+# sum(qvalue(angiographic_pval)$qvalue < 0.2)
+
+# sum(mod_tab$pval_syntax_score < 0.05)
+# sum(mod_tab$pval_DUKE < 0.05)
+# sum(mod_tab$pval_lesions < 0.05)
+# sum(mod_tab$pval_ndv < 0.05)
+
+# sum(angiographic_pval < 0.05)
+# sum(angiographic_pval2 < 0.05)
+
+# sum(p.adjust(angiographic_pval2) < 0.2)
+# which(p.adjust(angiographic_pval2) < 0.2)
+
+
+# angiographic_pval < 0.05
+# sum(angiographic_pval < 0.05)
+
+# sum(angiographic_pval < 0.05 & mod_tab$CAD_qvalue < 0.1)
+
+
+
+# cad_clust = mod_tab$clust[p.adjust(angiographic_pval) < 0.2 | p.adjust(mod_tab$CAD_pval) < 0.2]
+# cad_clust = mod_tab$clust[p.adjust(angiographic_pval) < 0.2 & p.adjust(mod_tab$CAD_pval) < 0.2]
+# cad_clust = mod_tab$clust[angiographic_pval < 0.05 & mod_tab$CAD_pval < 0.05]
+
+
+# cad_clust = mod_tab$clust[angiographic_pval < alpha & mod_tab$CAD_pval < alpha]
+
+# hdl_clust = mod_tab$clust[p.adjust(mod_tab$pval_HDL) < 0.2 & p.adjust(mod_tab[["HDL cholesterol_pval"]]) < 0.2]
+
+
+
+# library(metap)
+
+# # Combine p-values using Stouffer's method
+# comb_pvals = apply(cbind(angiographic_pval, mod_tab$CAD_pval), 1, function(pvals) {
+# 	sumz(pvals)$p
+# })
+# cad_clust = mod_tab$clust[p.adjust(comb_pvals) < 0.3]
+
+
+alpha = 0.05
+clust_annot = list()
+clust_annot$CAD = mod_tab$clust[angiographic_pval < alpha & mod_tab$CAD_pval < alpha]
+clust_annot$HDL = mod_tab$clust[mod_tab$pval_HDL < alpha & mod_tab[["HDL cholesterol_pval"]] < alpha]
+clust_annot$LDL = mod_tab$clust[mod_tab$pval_LDL < alpha & mod_tab[["LDL cholesterol_pval"]] < alpha]
+clust_annot$BMI = mod_tab$clust[mod_tab$pval_BMI < alpha & mod_tab[["Body mass index_pval"]] < alpha]
+
+
+# hdl_clust = mod_tab$clust[mod_tab$pval_HDL < alpha & mod_tab[["HDL cholesterol_pval"]] < alpha]
+# ldl_clust = mod_tab$clust[mod_tab$pval_LDL < alpha & mod_tab[["LDL cholesterol_pval"]] < alpha]
+# bmi_clust = mod_tab$clust[mod_tab$pval_BMI < alpha & mod_tab[["Body mass index_pval"]] < alpha]
+# glucose_clust
+
+# diabetes_clust = mod_tab$clust[mod_tab$pval_bl.glucose < alpha & mod_tab[["Type 2 diabetes_pval"]] < alpha]
+
+ # & mod_tab
+
+
+# cad_clust = mod_tab$clust[angiographic_pval < 0.05 | mod_tab$CAD_pval < 0.05]
+
+ts_cor_info[ts_cor_info$target_clust %in% cad_clust, ]
+ts_cor_info[ts_cor_info$clust %in% cad_clust, ]
+
+ts_cor_info$target_clust_GWAS_pheno = sapply(ts_cor_info$target_clust, function(k) {
+	found = sapply(clust_annot, function(clust) {
+		k %in% clust
+	})
+
+	paste(names(which(found)), collapse=";")
+})
+
+ts_cor_info$source_clust_GWAS_pheno = sapply(ts_cor_info$clust, function(k) {
+	found = sapply(clust_annot, function(clust) {
+		k %in% clust
+	})
+
+	paste(names(which(found)), collapse=";")
+})
+
+
+# ts_cor_info$target_CAD = ts_cor_info$target_clust %in% cad_clust
+# ts_cor_info$source_CAD = ts_cor_info$clust %in% cad_clust
+
+# ts_cor_info$target_HDL = ts_cor_info$target_clust %in% hdl_clust
+# ts_cor_info$source_HDL = ts_cor_info$clust %in% hdl_clust
+
+# ts_cor_info$target_LDL = ts_cor_info$target_clust %in% ldl_clust
+# ts_cor_info$source_LDL = ts_cor_info$clust %in% ldl_clust
+
+# ts_cor_info$target_BMI = ts_cor_info$target_clust %in% bmi_clust
+# ts_cor_info$source_BMI = ts_cor_info$clust %in% bmi_clust
+
+
+
+
+# sec_info_modules[sec_info_modules$clust %in% cad_clust, ]
+# Is the target tissue associated with
+
 write.csv(ts_cor_info, "co-expression/tables/CT_endocrines_TS_interactions.csv",
 	row.names=FALSE)
+
+length(unique(ts_cor_info$target_clust))
 
 
 # sum(ts_cor_info$supernetwork_edge)
@@ -399,11 +536,14 @@ write.csv(ts_cor_info, "co-expression/tables/CT_endocrines_TS_interactions.csv",
 # ts_cor_info[ts_cor_info$clust == 145, ]
 # ts_cor_info[ts_cor_info$clust == 33, ]
 # ts_cor_info[ts_cor_info$clust == 28, ]
+ts_cor_info[ts_cor_info$clust == 189, ]
+sec_info_modules[sec_info_modules$clust ==189, ]
+
 
 # ts_cor_info[ts_cor_info$target_clust == 65, ]
 
-# ts_cor_info[ts_cor_info$target_tissue == "AOR", ]
-# ts_cor_info[ts_cor_info$target_tissue == "MAM", ]
+ts_cor_info[ts_cor_info$target_tissue == "AOR", ]
+ts_cor_info[ts_cor_info$target_tissue == "MAM", ]
 # ts_cor_info[ts_cor_info$supernetwork_edge, ]
 
 # head(ts_cor_info, 200)
@@ -417,6 +557,7 @@ write.csv(ts_cor_info, "co-expression/tables/CT_endocrines_TS_interactions.csv",
 # table(ts_cor_info$target_clust)
 
 
+# between
 
 # Overlap with Bayesian network
 # ---------------------------------------------------

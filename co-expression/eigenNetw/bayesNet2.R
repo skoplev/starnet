@@ -10,7 +10,7 @@ library(squash)
 library(qvalue)
 
 data_dir = "/Users/sk/DataProjects/cross-tissue"  # root of data directory
-setwd("/Users/sk/Google Drive/projects/cross-tissue")
+setwd("~/Google Drive/projects/STARNET/cross-tissue")
 
 source("src/parse.R")
 source("src/base.R")
@@ -34,6 +34,10 @@ module_tab = read.table("co-expression/tables/module_tab.csv",
 	sep=",",
 	header=TRUE
 )
+
+# Load significant endocrine-eigengene correlations
+endocrines = read.csv("co-expression/tables/CT_endocrines_TS_interactions.csv")
+
 
 variables = cbind(
 	between$bwnet$eigengenes
@@ -120,7 +124,7 @@ variables = cbind(
 bn2 = fges(variables, maxDegree=100)  # Fast-greedy equivalence search
 module_tab_sub = module_tab[idx, ]
 
-g = graph_from_graphnel(bn2$graphNEL)
+g = igraph.from.graphNEL(bn2$graphNEL)
 
 epsilon = 10^-30  # small number
 # epsilon = 10^-6  # small number
@@ -368,6 +372,9 @@ cross_tissue = module_tab$purity < 0.95
 g = colorOutEdge(g)
 plotNetw(g, "tissue", "all")
 
+# plotNetw(g, "test", "all")
+
+
 # Reset edge colors
 E(g)$color = rep(rgb(0.9, 0.9, 0.9), length(E(g)))
 
@@ -532,7 +539,13 @@ first_pie = sapply(V(g)$pie, function(x) {
 })
 V(g)$color = pie_col[first_pie]
 g = colorOutEdge(g)
-plotNetw(g, "GWAS_comb", "all", shape="pie")
+
+g = resetEdgeColor(g)
+V(g)$color = vert_col[["angio_scores"]]
+edge_endocrine_support = apply(get.edgelist(g), 1, paste, collapse="_") %in% paste(endocrines$clust, endocrines$target_clust, sep="_")
+E(g)$color[edge_endocrine_support] = "black"
+
+plotNetw(g, "GWAS_comb2", "all", shape="pie")
 
 V(g)$color = rep("white", length(V(g)))
 V(g)$color[cross_tissue] = pie_col[first_pie][cross_tissue]
@@ -629,6 +642,33 @@ V(g)$color = vert_col[["cad"]]
 plotNetw(g, "cad", "CT")
 plotNetw(g, "cad", "TS")
 plotNetw(g, "cad", "all")
+
+
+
+# Plots with different edge colors
+
+
+# head(endocrines)
+# endocrines[endocrines$target_clust == 98, ]
+# endocrines[endocrines$target_tissue_primary == "AOR", ]
+# endocrines[endocrines$target_tissue_primary == "MAM", ]
+
+# length(table(endocrines$target_clust))
+# unique(endocrines$target_clust)
+
+g = resetEdgeColor(g)
+V(g)$color = vert_col[["angio_scores"]]
+edge_endocrine_support = apply(get.edgelist(g), 1, paste, collapse="_") %in% paste(endocrines$clust, endocrines$target_clust, sep="_")
+E(g)$color[edge_endocrine_support] = "black"
+
+plotNetw(g, "endocrine", "TS")
+plotNetw(g, "endocrine", "CT")
+plotNetw(g, "endocrine", "all")
+
+# unique(c(endocrines$clust, endocrines$target_clust))
+
+
+get.edgelist(g)[, 1] 
 
 
 # Some counts

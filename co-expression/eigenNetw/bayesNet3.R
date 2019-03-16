@@ -4,7 +4,7 @@ options(java.parameters = "-Xmx8g")  # Max Java memory heap size, for rcausal
 rm(list=ls())
 
 data_dir = "~/DataProjects/cross-tissue"  # root of data directory
-setwd("~/Google Drive/projects/STARNET/cross-tissue")
+setwd("~/GoogleDrive/projects/STARNET/cross-tissue")
 
 library(rcausal)
 library(limma)
@@ -13,11 +13,8 @@ library(gplots)
 library(igraph)
 library(reshape)
 
-
 source("src/parse.R")
 source("src/base.R")
-
-
 
 # Load cross-tissues modules
 between = new.env()
@@ -49,7 +46,6 @@ pheno_pval = read.table("pheno/tables/pheno_pval.csv",
 # 	Case_Ctrl_DEG=p.adjust(pheno_pval$case_control_DEG, method="BH")
 # )
 
-
 features = c("syntax_score", "DUKE", "case_control_DEG")
 pheno_padj = matrix(
 	p.adjust(
@@ -58,37 +54,7 @@ pheno_padj = matrix(
 	ncol=3)
 colnames(pheno_padj) = c("SYNTAX", "DUKE", "Case-Ctrl DEG")
 
-
 fdr = 0.01
-
-# Venn diagram of CAD module criteria
-pdf("co-expression/eigenNetw/v3/plots/DUKE_SYNTAX_DEG_venn.pdf")
-membership = pheno_padj < fdr
-
-counts = vennCounts(membership)
-vennDiagram(counts, circle.col=brewer.pal(9, "Set1"))
-dev.off()
-
-# cad_modules = which(apply(pheno_padj < fdr, 1, any))
-
-# At least two out of three
-cad_modules_idx = apply(pheno_padj < fdr,
-	1,
-	function(x) sum(x) >= 2)
-
-cad_modules = which(cad_modules_idx)
-length(cad_modules)
-
-
-# Counts of cross-tissue modules
-cross_tissue_idx = module_tab$purity < 0.95
-
-# Contingency table
-cad_ct_tab = table(cross_tissue_idx, cad_modules_idx)
-
-#
-chisq.test(cad_ct_tab, correct=FALSE)
-
 
 
 

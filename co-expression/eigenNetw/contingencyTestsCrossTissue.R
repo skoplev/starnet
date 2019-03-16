@@ -71,9 +71,9 @@ contingCrossTissue = function(pheno_padj, fdr, n_assoc, purity, purity_thresh_CT
 	return(test)
 }
 
-contingCrossTissue(pheno_padj, fdr, n_assoc=3, purity=module_tab$purity)
-contingCrossTissue(pheno_padj, fdr, n_assoc=2, purity=module_tab$purity)  # result from table in paper
 contingCrossTissue(pheno_padj, fdr, n_assoc=1, purity=module_tab$purity)
+contingCrossTissue(pheno_padj, fdr, n_assoc=2, purity=module_tab$purity)  # result from table in paper
+contingCrossTissue(pheno_padj, fdr, n_assoc=3, purity=module_tab$purity)
 
 # Exclude MAM, AOR primary tissues that are tissue specific
 tissues = c("AOR", "BLOOD", "LIV", "MAM", "SKLM", "SF", "VAF")
@@ -82,9 +82,9 @@ table(primary_tissue)
 
 idx = !(primary_tissue %in% c("AOR", "MAM") & module_tab$purity >= 0.95)
 
-contingCrossTissue(pheno_padj[idx, ], fdr, n_assoc=3, purity=module_tab$purity[idx])
-contingCrossTissue(pheno_padj[idx, ], fdr, n_assoc=2, purity=module_tab$purity[idx])
 contingCrossTissue(pheno_padj[idx, ], fdr, n_assoc=1, purity=module_tab$purity[idx])
+contingCrossTissue(pheno_padj[idx, ], fdr, n_assoc=2, purity=module_tab$purity[idx])
+contingCrossTissue(pheno_padj[idx, ], fdr, n_assoc=3, purity=module_tab$purity[idx])
 
 
 # Collect statistics for plotting

@@ -7,7 +7,6 @@ data_dir = "~/DataProjects/cross-tissue"  # root of data directory
 setwd("~/GoogleDrive/projects/STARNET/cross-tissue")
 
 library(rcausal)
-library(limma)
 library(RColorBrewer)
 library(gplots)
 library(igraph)

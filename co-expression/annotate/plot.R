@@ -1,5 +1,6 @@
+rm(list=ls())
 library(RColorBrewer)
-libary(data.table)
+library(data.table)
 
 data_dir = "/Users/sk/DataProjects/cross-tissue"  # root of data directory
 setwd("/Users/sk/Google Drive/projects/cross-tissue")
@@ -19,7 +20,11 @@ endocrine_tab = read.table("co-expression/tables/endocrine_tab.csv",
 # Ordered tissue composition based on correlation p-values 
 # -----------------------------------------------------
 n = 30
-tissues = c("AOR", "BLOOD", "LIV", "MAM", "SKLM", "SF", "VAF")
+# tissues = c("AOR", "BLOOD", "LIV", "MAM", "SKLM", "SF", "VAF")
+
+tissues = c("AOR", "BLOOD", "SKLM", "VAF", "MAM", "LIV",  "SF")
+# tissue_cols = brewer.pal(9, "Set1")[-6]
+
 
 # feature = "cad_qvalue"
 # feature = "pval_DUKE"
@@ -28,13 +33,13 @@ tissues = c("AOR", "BLOOD", "LIV", "MAM", "SKLM", "SF", "VAF")
 
 features = c(
 	# "cad_qvalue",
-	"cad_pval",
+	"CAD_pval",
 	"pval_DUKE",
 	"pval_syntax_score",
 	"pval_LDL")
 
 # par(mfcol=c(2, 1), mar=c(3, 4, 3, 2))
-pdf("co-expression/annotate/plots/tissue_composition.pdf",
+pdf("co-expression/annotate/plots/tissue_composition2.pdf",
 	width=14, height=4)
 par(mfcol=c(2, length(features)), mar=c(1, 4, 3, 2))
 

@@ -55,35 +55,56 @@ learnBayesNets.2 = function(clust, meta_genes, emat, max_size=3000) {
 		stop("Clust vector length differ from meta_genes.")
 	}
 
-	bayes_nets = lapply(1:max(clust), function(k) {
-		idx = which(clust == k)
+	bayes_nets = lapply(1:max(clust, na.rm=TRUE), function(k) {
+		row_idx = which(clust == k)
 
 		# Check module size
-		if (length(idx) > max_size) {
+		if (length(row_idx) > max_size) {
+			return(NA)
+		}
+
+		if (length(row_idx) < 10) {
 			return(NA)
 		}
 
 		# Tissue_transcipt IDs for module
-		mod_ids = paste(meta_genes$tissue[idx], meta_genes$transcript_id[idx], sep="_")
-		mod_gene_symbols = meta_genes$gene_symbol[idx]
+		mod_ids = paste(meta_genes$tissue[row_idx], meta_genes$transcript_id[row_idx], sep="_")
+		# mod_gene_symbols = meta_genes$gene_symbol[row_idx]
 
 		# Print first 10 transcript IDs
 		message("Module: ", paste(mod_ids[1:2], collapse=", "), "...(n=", length(mod_ids), ")")
 
-		# idx = match(mod_ids, meta_genes$id)
 
 		# Get matrix
-		submat = t(emat[idx, ])
+		submat = t(emat[row_idx,])
+
+		# Exclude samples that have no observations
+		col_idx = apply(submat, 1, function(col) {
+			return(!all(is.na(col)))
+		})
+
+		submat = submat[col_idx, ]
+
+		# Effective sample size
+		message("Sample size: ", sum(col_idx))
+
+
 		colnames(submat) = mod_ids
 
 		# Standardize and impute missing to mean
 		submat = scale(submat)
 		submat[is.na(submat)] = 0.0
-		submat = as.data.frame(submat)
+		# submat = as.data.frame(submat)
 
 		# bn = hc(submat)  # greedy hill climbing, BIC score
-		bn = fges(submat, maxDegree=100)  # Fast-greedy equivalence search
+		
+		bn = fges(submat, maxDegree=100
+		)  # Fast-greedy equivalence search
 
+
+		bn = NULL
+
+		gc()
 		return(bn)
 	})
 

@@ -104,10 +104,35 @@ loadNormData = function(data_dir, min_sd=0, exclude_files) {
 	return(expr_recast)
 }
 
+# Loads ensembl biotypes by loading Ensembl database
+parseEnsemblBiotype = function(ensembl) {
+	require(biomaRt)
+	ensembl_base = sapply(strsplit(ensembl, "[.]"), function(x) x[1])
+
+	# Get ensembl gene data
+	message("Loading ensembl")
+	
+	ensembl = useEnsembl(biomart="ensembl",
+		dataset="hsapiens_gene_ensembl")
+	ensembl_symbol_map = getBM(
+		attributes=c("ensembl_gene_id", "ensembl_transcript_id", "hgnc_symbol", "gene_biotype"),
+		mart=ensembl)
+
+	# Map ensembl IDs to biotype
+	gene_biotype = ensembl_symbol_map$gene_biotype[
+		match(ensembl_base, ensembl_symbol_map$ensembl_gene_id)
+	]
+
+	return(gene_biotype)
+}
+
 # Parses transcript ids from meta_genes table.
 # Changes ensembl and gene_symbol column if input data frame and returns new data frame.
 # Supports gene symbols with "_".
 parseTranscriptId = function(meta_genes) {
+	require(biomaRt)
+
+	message("Parsing transcript IDs")
 	# Get ensembl IDs as last "_" separated string
 	meta_genes$ensembl = sapply(
 		strsplit(as.character(meta_genes$transcript_id), "_"),
@@ -128,7 +153,36 @@ parseTranscriptId = function(meta_genes) {
 				return(gene_symbol)
 			}
 	})
+
+	meta_genes$tissue_transcript_id = paste(meta_genes$tissue, meta_genes$transcript_id, sep="_")
+
+	meta_genes$gene_biotype = parseEnsemblBiotype(meta_genes$ensembl)
+
 	return(meta_genes)
+}
+
+
+# Parses combined expression data  for all STARNET tissues
+parseExprTable = function(expr_recast) {
+	# Parse expression matrix
+	mat = data.matrix(expr_recast[, 3:ncol(expr_recast)])
+
+	meta_row = expr_recast[, 1:2]
+	meta_row = parseTranscriptId(meta_row)
+
+	rownames(mat) = meta_row$tissue_transcript_id
+
+	# Tissue-biotype groups
+	meta_row$tissue_biotype = paste(
+		meta_row$tissue,
+		meta_row$gene_biotype,
+		sep="_"
+	)
+
+	meta_row$ensembl_base = sapply(strsplit(meta_row$ensembl, "[.]"), function(x) x[1])
+
+
+	return(list(mat=mat, meta_row=meta_row))
 }
 
 

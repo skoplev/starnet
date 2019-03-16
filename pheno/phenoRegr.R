@@ -15,22 +15,27 @@ source_url("https://raw.githubusercontent.com/obigriffith/biostar-tutorials/mast
 
 data_dir = "/Users/sk/DataProjects/cross-tissue"
 
-setwd("/Users/sk/Google Drive/projects/cross-tissue")
+setwd("/Users/sk/Google Drive/projects/STARNET/cross-tissue")
 source("src/base.R")
 
 # Load data
 # ---------------------------------------------------------------
 
 # STARNET phenotype data
-pheno = fread(file.path(
-	"/Volumes/SANDY/phenotype_data",
-	"STARNET_main_phenotype_table.cases.Feb_29_2016.tbl"
-))
+# pheno = fread(file.path(
+# 	"/Volumes/SANDY/phenotype_data",
+# 	"STARNET_main_phenotype_table.cases.Feb_29_2016.tbl"
+# ))
 
-covar = fread(file.path(
-	"/Volumes/SANDY/phenotype_data",
-	"covariates.cases_and_controls.April_12_2016.txt"
-))
+pheno = fread(
+	"~/Google Drive/projects/STARNET/phenotype/data/current/STARNET_main_phenotype_table.2017_12_03.tsv"
+)
+
+# covar = fread(file.path(
+# 	"/Volumes/SANDY/phenotype_data",
+# 	"covariates.cases_and_controls.April_12_2016.txt"
+# ))
+
 
 
 # Load batch corrected expression data

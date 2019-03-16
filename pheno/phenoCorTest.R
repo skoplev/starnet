@@ -3,28 +3,32 @@ rm(list=ls())
 library(qvalue)
 library(devtools)
 library(RColorBrewer)
+library(data.table)
 
 # heatmap.3
 source_url("https://raw.githubusercontent.com/obigriffith/biostar-tutorials/master/Heatmaps/heatmap.3.R")
 
 data_dir = "/Users/sk/DataProjects/cross-tissue"
 
-setwd("/Users/sk/Google Drive/projects/cross-tissue")
+setwd("~/Google Drive/projects/STARNET/cross-tissue")
 source("src/base.R")
 
 # Load data
 # ---------------------------------------------------------------
 
 # STARNET phenotype data
-pheno = fread(file.path(
-	"/Volumes/SANDY/phenotype_data",
-	"STARNET_main_phenotype_table.cases.Feb_29_2016.tbl"
-))
+# pheno = fread(file.path(
+# 	"/Volumes/SANDY/phenotype_data",
+# 	"STARNET_main_phenotype_table.cases.Feb_29_2016.tbl"
+# ))
 
-covar = fread(file.path(
-	"/Volumes/SANDY/phenotype_data",
-	"covariates.cases_and_controls.April_12_2016.txt"
-))
+pheno = fread("~/Google Drive/projects/STARNET/phenotype/data/current/STARNET_main_phenotype_table.2017_12_03.tsv")
+
+
+# covar = fread(file.path(
+# 	"/Volumes/SANDY/phenotype_data",
+# 	"covariates.cases_and_controls.April_12_2016.txt"
+# ))
 
 
 # Load batch corrected expression data
@@ -52,10 +56,24 @@ pheno_match = lapply(expr_mats_batch, function(mat) {
 
 # Test of phenotype correlations
 
-phenotypes = c("syntax_score", "LDL", "HDL")
+# phenotypes = c("syntax_score", "LDL", "HDL")
+
+phenotypes = c(
+	"syntax_score",
+	"DUKE",
+	"fP-TG(mmol/l)",
+	"HbA1c(%)",
+	"Waist/Hip",
+	"BMI(kg/m2)",
+	"fP-LDL-Chol(mmol/l)",
+	"fP-HDL-Chol(mmol/l)",
+	"CRP(mg/l)",
+	"P-Chol(mmol/l)")
+
 
 pheno_cor = list()
 for (phenotype in phenotypes) {
+	message(phenotype)
 	pheno_cor[[phenotype]] = lapply(1:length(expr_mats_batch), function(i) {
 		mat = expr_mats_batch[[i]]
 		mat = as.matrix(mat)
@@ -106,7 +124,65 @@ for (phenotype in phenotypes) {
 	})
 }
 
-save(pheno_cor, file=file.path(data_dir, "STARNET/pheno_cor/pheno_cor.RData"))
+save(pheno_cor, file=file.path(data_dir, "STARNET/pheno_cor/pheno_cor2.RData"))
+
+
+
+# Density plots of distributions
+# ------------------------------------------------
+
+pdf("pheno/plots/pheno_cor_densities.pdf", width=8.0, height=3.5)
+tissue_order = c("AOR", "MAM", "LIV", "VAF", "SUF", "SKM", "BLO")
+tissue_col = brewer.pal(9, "Set1")[c(1, 5, 7, 4, 8, 3, 2)]
+
+par(mfcol=c(2, 5), mar=c(4, 1.5, 2, 1.5))
+for (i in 1:length(pheno_cor)) {
+
+	# tissue_cor = pheno_cor[[i]][!names(pheno_cor[[i]]) %in% exclude_tissues]
+
+	tissue_cor = pheno_cor[[i]][match(tissue_order, names(pheno_cor[[i]]))]
+
+	densities = lapply(tissue_cor, function(x) {
+		density(x$cor)
+	})
+
+	min_max_val = sapply(densities, function(d) c(min(d$x), max(d$x)))
+	density_height = sapply(densities, function(d) c(max(d$y)))
+
+	cor_range = range(min_max_val)
+
+	delta = 2.0
+
+	plot(0, 0, type="n",
+		xlim=range(min_max_val),
+		ylim=c(0, max(density_height) + delta*length(densities)),
+		bty="n", yaxt="n",
+		xlab=paste(names(pheno_cor)[i], "cor."),
+		ylab=""
+	)
+
+	for (j in length(densities):1) {
+		x = densities[[j]]$x
+		y = densities[[j]]$y
+
+		polygon(x, y + delta * (j - 1),
+			col=addAlpha(tissue_col[j], 0.4),
+			border=tissue_col[j])
+
+		# Endpoints
+		points(x[1],
+			y[1] + delta * (j - 1),
+			pch=16, col=tissue_col[j]
+		)
+
+		points(x[length(x)],
+			y[length(y)] + delta * (j - 1),
+			pch=16, col=tissue_col[j]
+		)
+	}
+}
+dev.off()
+
 
 
 # Correlations based on permutations

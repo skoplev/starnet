@@ -10,7 +10,7 @@ library(squash)
 library(qvalue)
 
 data_dir = "/Users/sk/DataProjects/cross-tissue"  # root of data directory
-setwd("~/Google Drive/projects/STARNET/cross-tissue")
+setwd("~/GoogleDrive/projects/STARNET/cross-tissue")
 
 source("src/parse.R")
 source("src/base.R")
@@ -493,7 +493,6 @@ write.csv(cad_enrich_CT_genes, file="co-expression/tables/CAD_enriched_CT.csv")
 
 
 # Pooled GWAS results
-
 GWAS_enrich_comb = list()
 GWAS_enrich_comb$CAD = GWAS_enrich$CAD
 GWAS_enrich_comb$Blood.lipids =
@@ -814,7 +813,6 @@ lay = layout_with_sugiyama(g,
 
 
 
-
 # lay$layout
 
 # layout = lay$layout
@@ -991,6 +989,34 @@ abline(h=-log10(0.1), col=line_col, lty=2)
 dev.off()
 
 
+# Load metaanalysis p-values
+
+signature_pmat = read.csv("pheno/tables/pheno_pval.csv", check.names=FALSE)
+
+sign
+
+
+# pdf("co-expression/eigenNetw/v2/igraph/h2_features_signatures.pdf", height=16)
+pdf("co-expression/eigenNetw/v2/igraph/h2_features_signatures.pdf", height=8, width=12)
+par(mfrow=c(4, 3))
+for (i in (2:ncol(signature_pmat))[c(-4, -5)]) {
+# for (i in 2:ncol(signature_pmat)) {
+	x = -log10(p.adjust(signature_pmat[, i], method="BH"))
+	# x[x>16] = 16
+	x[x>100] = 100
+	# x[x>300] = 300
+	plot(layer, x,
+		bg=tis_col,
+		col=cross_tissue,
+		main=colnames(signature_pmat)[i],
+		ylab="-log10 p (BH)",
+		xlab="Sugiyama layer",
+		pch=21
+	)
+	abline(h=-log10(0.1), col=line_col, lty=2)
+	# cor.test(layer, x)
+}
+dev.off()
 
 cor.test(lay$layout[, 2], -log10(module_tab$pval_DUKE))
 

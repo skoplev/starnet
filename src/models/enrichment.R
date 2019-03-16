@@ -78,3 +78,53 @@ hyperGeometricModuleTest = function(env, genes) {
 
 	return(tab)
 }
+
+# Multiple hypergeometric tests for enrichment in co-expression modules.
+# clust_genes is a vector of gene IDs.
+# clust is a vector of integers encoding the assigned clusters
+# genes is the set of genes tested
+hyperGeometricModuleTestCore = function(clust_genes, clust, genes) {
+	require(qvalue)
+	stopifnot(length(clust_genes) == length(clust))
+
+	# mod_stats = countModuleTissueStat(env)
+	gene_bool = clust_genes %in% genes
+	# sum(gene_bool)
+
+	# Calculate module sizes
+	clust_size = table(clust)
+
+	# Aggregate gene symbols by module
+	genes_module = sapply(1:max(clust), function(k) {
+		idx = clust == k & gene_bool
+
+		if (sum(idx) == 0) {
+			return(c())
+		} else {
+			return(clust_genes[idx])
+		}
+	})
+
+	# Count number of found GWAS-associated genes
+	tab = data.frame(n_genes=sapply(genes_module, function(genes) max(0, length(genes))))
+	tab$genes = sapply(genes_module, function(genes) paste(genes, collapse=";"))
+
+	# Hypergeometric test of CAD-associated transcripts in each module
+	m_mRNA = sum(clust_genes %in% genes)
+	n_non_mRNA = sum(!clust_genes %in% genes)
+
+	p_hyper = sapply(1:max(clust), function(k) {
+		module_size = clust_size[k]
+		module_mRNA = max(0, length(genes_module[[k]]))
+
+		p = 1 - phyper(module_mRNA, m_mRNA, n_non_mRNA, module_size)
+		return(p)
+	})
+
+	tab$pval = p_hyper
+	try({
+		tab$qvalue = qvalue(tab$pval)$qvalue
+	})
+
+	return(tab)
+}

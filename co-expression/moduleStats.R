@@ -83,7 +83,7 @@ sel_modules = mod_tab$purity < 0.95 & !exclude
 hc_sel = hclust(dist(t(module_tissue_freq[,sel_modules])))
 
 
-pdf("co-expression/plots/cross-tissue-overview3.pdf")
+pdf("co-expression/plots/cross-tissue-overview4.pdf")
 par(mfcol=c(2, 2), lwd=1.0)
 # plot(density(tissue_entropy), main="Module tissue entropy")  # not used
 # plot(density(tissue_entropy), xlim=c(0, 1), main="Module tissue entropy")  # not used

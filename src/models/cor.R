@@ -23,7 +23,7 @@ phenoCorTest = function(mat, pheno_matched, phenotypes=NA) {
 		# Correlation tests
 		cor_tests = lapply(1:ncol(mat), function(k) {
 			tryCatch({
-				cor_test = cor.test(mat[,k], pheno_matched[[phenotype]], method="pearson")
+				cor_test = cor.test(as.numeric(mat[,k]), as.numeric(pheno_matched[[phenotype]]), method="pearson")
 				return(cor_test)
 			}, error=function(e) {
 				# Null

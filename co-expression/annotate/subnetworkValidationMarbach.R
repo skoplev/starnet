@@ -4,6 +4,7 @@ library(data.table)
 library(caret)
 library(gplots)
 library(viridis)
+library(RColorBrewer)
 
 library(compiler)
 enableJIT(3)
@@ -87,10 +88,81 @@ saveRDS(netw_tests, file="co-expression/annotate/netwValidation/bayesnet1Marbach
 saveRDS(netw_tests_all, file="co-expression/annotate/netwValidation/bayesnet1Marbach.rds")
 
 
-
 # Visualize results
 # -------------------------------------------------
-# boxplot(results[, 1])
+
+sensitivity = getStat(netw_tests_all, "sensitivity")
+precision = getStat(netw_tests_all, "precision")
+TP = getStat(netw_tests_all, "TP")
+
+plot(sensitivity * 100, precision * 100)
+
+
+# Equal weight optimal match, get statistics
+opt_idx = apply(sensitivity + precision, 1, which.max)
+
+# Get matrix coordinates of optimal match
+opt_mat_idx = cbind(
+	1:length(opt_idx),
+	opt_idx)
+
+# Collect data frame of optimal validation statistics
+netw_val = data.frame(
+	module=rownames(sensitivity),
+	network_match=colnames(sensitivity)[opt_idx],
+	sensitivity=sensitivity[opt_mat_idx],
+	precision=precision[opt_mat_idx],
+	TP=TP[opt_mat_idx]
+)
+netw_val = netw_val[order(netw_val$precision, decreasing=TRUE), ]
+
+
+
+# Plot from optimal precision-sensitivity networks
+pdf("co-expression/annotate/netwValidation/plots/bnet1_maxPrecisionSensitivity.pdf", height=5, width=4.5)
+pt_col = rep("black", nrow(netw_val))
+
+colors = brewer.pal(9, "Set1")
+
+highlight_netw = names(sort(table(netw_val$network_match), decreasing=TRUE)[2:4])
+for (i in 1:length(highlight_netw)) {
+	pt_col[netw_val$network_match == highlight_netw[i]] = brewer.pal(9, "Set1")[i]
+}
+
+plot(netw_val$sensitivity * 100, netw_val$precision * 100,
+	main="BayesNet vs Marbach, best per module",
+	xlab="Sensitivity (%)",
+	ylab="Precision (%)",
+	col=pt_col,
+	pch=16)
+
+legend("topright", legend=highlight_netw, col=colors, pch=16)
+dev.off()
+
+
+
+
+pdf("co-expression/annotate/netwValidation/plots/bnet1_precision_boxplots.pdf", height=4, width=14.0)
+idx = order(apply(precision, 1, max), decreasing=TRUE)
+# par(cex.axis=0.5)
+boxplot(t(precision[idx, ]) * 100,
+	frame=FALSE,
+	cex.axis=0.5,
+	las=2,
+	pch=16,
+	cex=0.5,
+	ylab="Precision (%)")
+dev.off()
+
+
+
+heatmap.2(
+	# sensitivity * 100,
+	precision * 100,
+	trace="none",
+	col=viridis(100)
+)
+
 
 pt_size = results[, 3] * 0.1
 x = results[, 1] * 100
@@ -105,35 +177,4 @@ boxplot(as.data.frame(results)$sensitivity)
 
 boxplot(data.matrix(as.data.frame(results))[, 1] * 100)
 boxplot(as.data.frame(results)[, 1] * 100)
-
-
-
-# sensitivity = getStat(netw_tests, "sensitivity")
-
-
-sensitivity = getStat(netw_tests_all, "sensitivity")
-precision = getStat(netw_tests_all, "precision")
-
-TP = getStat(netw_tests_all, "TP")
-
-
-apply(sensitivity, 2, max)
-
-
-# data.frame(sensitivity)
-# colnames(sensitivity) = names(netw_ref)
-
-# sort(apply(sensitivity, 1, max))
-
-heatmap.2(
-	# sensitivity * 100,
-	precision * 100,
-	trace="none",
-	col=viridis(100)
-)
-
-
-idx = order(apply(precision, 1, max), decreasing=TRUE)
-par(cex.axis=0.5)
-boxplot(t(precision[idx, ]) * 100, las=2, pch=16, cex=0.5, ylab="Precision (%)")
 

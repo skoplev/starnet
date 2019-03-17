@@ -680,79 +680,9 @@ eqtl_tab$eQTL_cad_genes = sapply(module_eqtl_genes, function(tissue_gene_ids) {
 
 eqtl_tab$n_eQTL_cad_genes = sapply(eqtl_tab$eQTL_cad_genes, function(genes) length(strsplit(genes, ";")[[1]]))
 
-# Bayesian network for each cross-tissue module, Key driver analysis.
-# -----------------------------------------------------------
-source("src/models/bayesNet.R")
-library(igraph)
-library(rcausal)
-library(Mergeomics)
 
-bayes_dir = "co-expression/annotate/bayesNet"
-
-# Infer Bayeisan networks withing cross-tissue modules
-bayes_nets = learnBayesNets.2(between$clust,
-	between$meta_genes,
-	emat,
-	max_size=3000)
-
-edge_list = lapply(bayes_nets, function(net) {
-	if (is.na(net)) {
-		return(NA)
-	} else {
-		g = graph_from_graphnel(net$graphNEL)
-		return(as_edgelist(g))
-	}
-})
-names(edge_list) = 1:length(edge_list)  # cluster ids
-
-# Remove entries for large modules without bayesian networks
-edge_list = edge_list[!is.na(edge_list)]
-
-# Combine edge list
-edge_list = Reduce(rbind, edge_list)
-
-
-edge_list = cbind(edge_list, 1)  # weight
-colnames(edge_list) = c("TAIL", "HEAD", "WEIGHT")
-edge_list = as.data.frame(edge_list)
-
-
-# Write edge list to file, used for input to Weighted Key Driver analysis.
-write.table(edge_list,
-	file.path(bayes_dir, "all.tsv"),
-	sep="\t",
-	row.names=FALSE,
-	quote=FALSE
-)
-
-# Make module table for KDA.
-kda_mod_tab = data.frame(
-	MODULE=between$clust,
-	NODE=paste(between$meta_genes$tissue, between$meta_genes$transcript_id, sep="_")
-)
-
-write.table(kda_mod_tab,
-	file.path(bayes_dir, "nodes.tsv"),
-	sep="\t",
-	row.names=FALSE,
-	quote=FALSE
-)
-
-# Weighted key driver analysis (wKDA) of Bayesian networks within each cross-tissue module
-# kda_label = paste0(gene, "_key_driver")
-kda_label = "modules"
-job.kda = list()
-job.kda$netfile = file.path(bayes_dir, "all.tsv")
-job.kda$modfile = file.path(bayes_dir, "nodes.tsv")
-job.kda$label = kda_label
-job.kda$folder = bayes_dir
-job.kda$nperm = 20
-
-job.kda = kda.configure(job.kda)
-job.kda = kda.start(job.kda)
-job.kda = kda.prepare(job.kda)
-job.kda = kda.analyze(job.kda)
-job.kda = kda.finish(job.kda)
+# Key driver analysis, see bayesNet1.R
+# -------------------------------------------
 
 
 # load results table

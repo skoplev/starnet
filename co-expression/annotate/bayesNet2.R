@@ -2,10 +2,23 @@ rm(list=ls())
 
 options(java.parameters = "-Xmx8g")  # Max Java memory heap size, for rcausal
 
+library(withr)
+library(devtools)
+
+# Local install, don't update java etc...
+with_libpaths(new="/Users/sk/GoogleDrive/projects/STARNET/cross-tissue/lib/R", install_github('bd2kccd/r-causal'))
+with_libpaths(new="/Users/sk/GoogleDrive/projects/STARNET/cross-tissue/lib/R", library('rcausal'))
+
+
 library(data.table)
 library(igraph)
-library(rcausal)
+# library(rcausal)
+library(bnlearn)
 library(Mergeomics)
+# library(plyr)
+
+library(compiler)
+enableJIT(3)
 
 setwd("~/GoogleDrive/projects/STARNET/cross-tissue")
 data_dir = "/Users/sk/DataProjects/cross-tissue"  # root of data directory
@@ -42,15 +55,23 @@ if (!all(meta_genes$transcript_id == between$meta_genes$transcript_id)) {
 }
 
 
+# Load TF definition from Lambert et al
+# -------------------------------------------------------
+
+tf_symbols = as.character(read.table("transcription-factors/lambert/TF_names_v_1.01.txt")$V1)
+
+
 # Bayesian network for each cross-tissue module, Key driver analysis.
 # -----------------------------------------------------------
 
-bayes_dir = "co-expression/annotate/bayesNet"
+bayes_dir = "co-expression/annotate/bayesNet2"
 
 # Infer Bayeisan networks withing cross-tissue modules
-bayes_nets = learnBayesNets.2(between$clust,
-	between$meta_genes,
-	emat,
+bayes_nets = learnBayesNets.3(
+	clust=between$clust,
+	meta_genes=between$meta_genes,
+	emat=emat,
+	source_symbols=tf_symbols,
 	max_size=3000)
 
 edge_list = lapply(bayes_nets, function(net) {

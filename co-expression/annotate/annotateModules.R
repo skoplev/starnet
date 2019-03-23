@@ -22,7 +22,7 @@ source("src/models/regr.R")  # regression models
 source("src/models/cor.R")
 source("src/models/enrichment.R")
 source("src/parse.R")
-source("src/models/bayesNet.R")
+# source("src/models/bayesNet.R")
 
 
 

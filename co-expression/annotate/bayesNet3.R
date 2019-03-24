@@ -16,6 +16,7 @@ library(igraph)
 library(bnlearn)
 library(Mergeomics)
 # library(plyr)
+library(RColorBrewer)
 
 library(compiler)
 enableJIT(3)
@@ -140,3 +141,40 @@ bayes_nets = learnBayesNets.4(
 	ref_netw=marbach_netw_all,
 	eqtl_netw=cis_trans_eqtl_all,
 	max_size=3000)
+
+# save(bayes_nets, file=file.path(bayes_dir, "bayes_nets_marbach01.RData"))
+
+
+# Plots results
+# ----------------------------------------
+
+edge_stats = sapply(bayes_nets, function(x) {
+	if (is.na(x)) {
+		values = rep(NA, 3)
+	} else {
+		n1 = nrow(x$ref_netw_include)
+		n2 = nrow(x$eqtl_netw_include)
+		n3 = length(x$edges)
+		values = c(n1, n2, n3 - n2 - n1)
+		names(values) = c("Known TF-gene", "cis-trans-eQTL", "Inferred")
+	}
+	return(values)
+})
+
+
+pdf("co-expression/annotate/bayesNet3/plots/bayes_netw_edges_marbach01.pdf", width=5, height=4)
+idx = order(apply(edge_stats, 2, sum), decreasing=TRUE)
+barplot(
+	edge_stats[, idx],
+	xlab="Co-expression module",
+	ylab="Gene-gene interactions",
+	border=NA,
+	space=-0.3,
+	col=brewer.pal(9, "Set1")[c(5, 1, 2)],
+	legend.text=TRUE)
+dev.off()
+
+# lapply(bayes_nets, function(x) {
+# 	if (!is.na(x))
+# 		x$eqtl_netw_include
+# })

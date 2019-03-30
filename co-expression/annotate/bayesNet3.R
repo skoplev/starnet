@@ -178,3 +178,9 @@ dev.off()
 # 	if (!is.na(x))
 # 		x$eqtl_netw_include
 # })
+
+lapply(bayes_nets, function(x) {
+	if (!is.na(x))
+		x$ref_netw_include
+})
+

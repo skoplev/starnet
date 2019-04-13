@@ -6,11 +6,13 @@ library(DESeq2)
 library(biomaRt)
 library(limma)  # for vennDiagram
 library(gplots)
+library(UpSetR)
 
 
 setwd("~/GoogleDrive/projects/STARNET/cross-tissue")
 
-counts = fread("mice-inject/data/feature_counts/gene_counts.txt")
+# counts = fread("mice-inject/data/feature_counts/gene_counts.txt")
+counts = fread("mice-inject/data/feature_counts_all/gene_counts.txt")
 
 # Format into count matrix
 count_mat = counts[, -1:-6]
@@ -81,7 +83,8 @@ dds = DESeqDataSetFromMatrix(countData=count_mat[include, ],
 
 dds = DESeq(dds)
 
-endocrines = c("EPDR1", "FCN2", "LBP")
+# endocrines = c("EPDR1", "FCN2", "LBP")
+endocrines = c("EPDR1", "FCN2", "LBP", "FSTL3")
 results = lapply(endocrines, function(pert) {
 	res = results(dds, contrast=c("condition", pert, "Veh"))
 
@@ -94,10 +97,20 @@ results = lapply(endocrines, function(pert) {
 names(results) = endocrines
 
 
+
+head(data.frame(results[[4]]), 20)
+
+head(data.frame(results[[4]][results[[4]]$log2FoldChange > 0, ]), 20)
+
+
+
 # Get gene lists of differentially expressed genes
 fdr = 0.05
+min_log2fc = 1
+
 sig_genes_human = lapply(results, function(res) {
-	sig = res$padj < fdr
+	# sig = res$padj < fdr
+	sig = res$padj < fdr & abs(res$log2FoldChange) > min_log2fc
 	sig_symbols = res$hgnc_symbol[sig]  # homologous human gene symbols
 
 	sig_symbols = na.omit(sig_symbols)
@@ -107,7 +120,8 @@ sig_genes_human = lapply(results, function(res) {
 })
 
 sig_genes_mouse = lapply(results, function(res) {
-	sig = res$padj < fdr
+	# sig = res$padj < fdr 
+	sig = res$padj < fdr & abs(res$log2FoldChange) > min_log2fc
 	sig_symbols = res$mgi_symbol[sig]  # homologous human gene symbols
 
 	sig_symbols = na.omit(sig_symbols)
@@ -122,12 +136,12 @@ sapply(sig_genes_mouse, length)
 
 write(
 	paste(intersect(sig_genes_mouse[[2]], sig_genes_mouse[[3]]), collapse=", "),
-	"mice-inject/DEG/mouse_FCN2_LBP.txt")
+	"mice-inject/DEG_all/mouse_FCN2_LBP.txt")
 
 # Write gene lists
-for (cond in names(sig_genes)) {
-	write(sig_genes_mouse[[cond]], paste0("mice-inject/DEG/mouse_", cond, ".txt"))
-	write(sig_genes_human[[cond]], paste0("mice-inject/DEG/human_", cond, ".txt"))
+for (cond in names(sig_genes_mouse)) {
+	write(sig_genes_mouse[[cond]], paste0("mice-inject/DEG_all/mouse_", cond, ".txt"))
+	write(sig_genes_human[[cond]], paste0("mice-inject/DEG_all/human_", cond, ".txt"))
 }
 
 # Print specific resutls
@@ -135,7 +149,10 @@ gene = "DHCR7"
 gene = "FAM213A"
 gene = "RDH11"
 gene = "DHCR24"
-for (i in 1:3) {
+gene = "FAM213A"
+
+gene = "PCSK9"
+for (i in 1:4) {
 	print(results[[i]][which(results[[i]]$hgnc_symbol == gene), ])
 }
 
@@ -156,41 +173,106 @@ dev.off()
 
 # Pathway enrichment, from Enrichr
 # -------------------------------------
-kegg_fcn2 = fread("mice-inject/DEG/enrichr/mouse_FCN2_KEGG_2016_table.txt")
-kegg_lbp = fread("mice-inject/DEG/enrichr/mouse_LBP_KEGG_2016_table.txt")
 
+
+kegg_fcn2 = fread("mice-inject/DEG_all/enrichr/KEGG/FCN2_KEGG_2016_table.txt")
+kegg_lbp = fread("mice-inject/DEG_all/enrichr/KEGG/LBP_KEGG_2016_table.txt")
+kegg_fstl3 = fread("mice-inject/DEG_all/enrichr/KEGG/FSTL3_KEGG_2016_table.txt")
+
+
+path_fdr = 0.05
 terms = c(
-	"Non-alcoholic fatty liver disease (NAFLD)_Homo sapiens_hsa04932",
-	"Protein processing in endoplasmic reticulum_Homo sapiens_hsa04141"
+	kegg_fcn2$Term[kegg_fcn2[["Adjusted P-value"]] < path_fdr],
+	kegg_lbp$Term[kegg_lbp[["Adjusted P-value"]] < path_fdr],
+	kegg_fstl3$Term[kegg_fstl3[["Adjusted P-value"]] < path_fdr]
 )
+terms = unique(terms)
+
+default = function(value) {
+	if (length(value) == 1) {
+		return(value)
+	} else if (length(value) > 1) {
+		return(value[1])
+	} else {
+		return(NA)
+	}
+}
 
 kegg_pvals = sapply(terms, function(x) {
-	fcn2_pval = kegg_fcn2[["Adjusted P-value"]][kegg_fcn2$Term == x]
-	lbp_pval = kegg_lbp[["Adjusted P-value"]][kegg_lbp$Term == x]
+	fcn2_pval = kegg_fcn2[["Adjusted P-value"]][which(kegg_fcn2$Term == x)]
+	lbp_pval = kegg_lbp[["Adjusted P-value"]][which(kegg_lbp$Term == x)]
+	fstl3_pval = kegg_fstl3[["Adjusted P-value"]][which(kegg_fstl3$Term == x)]
 
-	pvals = c(lbp_pval, fcn2_pval)
-	names(pvals) = c("Lbp", "Fcn2")
+	pvals = c(default(fcn2_pval), default(lbp_pval), default(fstl3_pval))
+	names(pvals) = c("Fcn2", "Lbp", "Fslt3")
 	return(pvals)
 })
 
+colnames(kegg_pvals) = sapply(strsplit(colnames(kegg_pvals), "_"), function(x) x[1])
 
-pdf("mice-inject/plots/KEGG_enrichrment_LBP_FCN2.pdf", width=2, height=5.0)
-par(mar=c(16, 4, 2, 2))
+
+pdf("mice-inject/plots/KEGG_pathway_barplot.pdf", width=5, height=5)
+idx = order(apply(kegg_pvals, 2, min, na.rm=TRUE), decreasing=TRUE)
+
+# idx = order(apply(-log10(kegg_pvals), 2, sum, na.rm=TRUE), decreasing=TRUE)
+kegg_pvals = kegg_pvals[, idx]
+
+par(mar=c(4, 16, 3, 3))
 barplot(-log10(kegg_pvals),
 	beside=TRUE,
+	horiz=TRUE,
 	las=2,
-	ylab="-log10 p (BH)",
+	# col=brewer.pal(9, "Set1")[c(3, 2, 4)],
+	col=brewer.pal(9, "Set1")[c(2, 3, 4)],
 	legend.text=TRUE,
-	col=brewer.pal(9, "Set1")[3:2])
+	ylab="KEGG pathway",
+	xlab="-log10 p (BH)"
+)
 
-abline(h=-log10(0.05), lty=2, col="grey")
-abline(h=0)
+abline(v=0)
+
+abline(v=-log10(0.1), col="grey", lty=2)
 dev.off()
+
+
+# kegg_fcn2 = fread("mice-inject/DEG/enrichr/mouse_FCN2_KEGG_2016_table.txt")
+# kegg_lbp = fread("mice-inject/DEG/enrichr/mouse_LBP_KEGG_2016_table.txt")
+
+
+
+
+# terms = c(
+# 	"Non-alcoholic fatty liver disease (NAFLD)_Homo sapiens_hsa04932",
+# 	"Protein processing in endoplasmic reticulum_Homo sapiens_hsa04141"
+# )
+
+# kegg_pvals = sapply(terms, function(x) {
+# 	fcn2_pval = kegg_fcn2[["Adjusted P-value"]][kegg_fcn2$Term == x]
+# 	lbp_pval = kegg_lbp[["Adjusted P-value"]][kegg_lbp$Term == x]
+
+# 	pvals = c(lbp_pval, fcn2_pval)
+# 	names(pvals) = c("Lbp", "Fcn2")
+# 	return(pvals)
+# })
+
+
+# pdf("mice-inject/plots/KEGG_enrichrment_LBP_FCN2.pdf", width=2, height=5.0)
+# par(mar=c(16, 4, 2, 2))
+# barplot(-log10(kegg_pvals),
+# 	beside=TRUE,
+# 	las=2,
+# 	ylab="-log10 p (BH)",
+# 	legend.text=TRUE,
+# 	col=brewer.pal(9, "Set1")[3:2])
+
+# abline(h=-log10(0.05), lty=2, col="grey")
+# abline(h=0)
+# dev.off()
 
 
 # Normalization based on size factors
 # ---------------------------------------
-sizeFactors(dds)
+# sizeFactors(dds)
 
 library(edgeR)
 
@@ -204,11 +286,80 @@ cpm_norm = cpm(count_mat[include, ])
 rownames(cpm_norm) = getGeneSymbol(rownames(cpm_norm))
 
 
+# count_norm[rownames(count_norm) == "Tnnt2", ]
+
+# cpm_norm[rownames(cpm_norm) == "Tnnt2", ]
+
+# count_norm[rownames(count_norm) == "Pcsk9", ]
+
+# count_mat[include, ][rownames(count_norm) == "Pcsk9", ]
+# count_mat[include, ][rownames(count_norm) == "Tnnt2", ]
+# count_mat[include, ][rownames(count_norm) == "Pln", ]
+
+
+# Module 98 targeted
+# ------------------------------------------
+library(metap)
+
+mod_tab = fread("co-expression/tables/modules.csv")
+
+genes98 = mod_tab$gene_symbol[mod_tab$clust == 98]
+
+results_mod98 = lapply(results, function(res) {
+	res[res$hgnc_symbol %in% genes98, ]
+})
+
+
+lapply(results_mod98, as.data.frame)
+
+lapply(results_mod98, function(res) {
+	# sumz(res$pvalue)  # Stouffer metap
+	sumlog(res$pvalue)  # Fisher's
+})
+
+
+par(mfrow=c(4, 1))
+for (i in 1:4) {
+	n = nrow(results_mod98[[i]])
+	pvals = results_mod98[[i]]$pvalue
+	plot(
+		-log10(pvals),
+		pch=16,
+		bty="n"
+	)
+	abline(h=-log10(0.05), col="grey", lty=2)
+
+	idx = pvals < 0.05
+	text(-log10(pvals[idx]),
+		xpd=TRUE,
+		labels=results_mod98[[i]]$mgi_symbol[idx],
+		pos=4
+	)
+}
+
+
+
+
+# UpSet plot of overlaps with DEGs
+pdf("mice-inject/plots/DEG_upset.pdf", height=3.0, width=4)
+# pdf("mice-inject/plots/DEG_upset.pdf")
+gene_sets = c(sig_genes_human, list("Module 98"=genes98))
+upset(fromList(gene_sets),
+	sets.bar.color=brewer.pal(9, "Set1")[1],
+	mainbar.y.label="Gene overlap",
+	sets.x.label="DEGs (FDR < 5%)",
+	mb.ratio=c(0.5, 0.5)
+	# empty.intersections="on"
+)
+dev.off()
+
+sort(table(unlist(gene_sets)))
+
 
 # Plots of differentially expressed genes
 # -----------------------------------------
 
-plotExpr = function(gene, mat, conditions=c("Veh", "EPDR1", "FCN2", "LBP")) {
+plotExpr = function(gene, mat, conditions=c("Veh", "EPDR1", "FCN2", "LBP", "FSTL3")) {
 	values = lapply(conditions, function(cond) {
 		i = match(gene, rownames(mat))
 		expr_values = mat[i, samples$condition == cond]
@@ -221,7 +372,7 @@ plotExpr = function(gene, mat, conditions=c("Veh", "EPDR1", "FCN2", "LBP")) {
 		gene=mat[match(gene, rownames(mat)), ]
 	)
 
-	colors = brewer.pal(9, "Set1")[c(9, 1:3)]
+	colors = brewer.pal(9, "Set1")[c(9, 1:(length(conditions) - 1))]
 
 	plotmeans(gene~conditions, data=df,
 		ylab=paste(gene, "(CPM)"),
@@ -252,20 +403,38 @@ plotExpr = function(gene, mat, conditions=c("Veh", "EPDR1", "FCN2", "LBP")) {
 	}
 
 	# Print results table
-	for (i in 1:3) {
+	for (i in 1:(length(results))) {
 		print(results[[i]][which(results[[i]]$mgi_symbol == gene), ])
 	}
 
 }
 
 
-pdf("mice-inject/plots/gene_expr_DEG_mod98.pdf", height=2.1, width=5.5)
+mod98_overlap = lapply(sig_genes_human, function(genes) {
+	intersect(genes, genes98)
+})
+mod98_overlap = unlist(mod98_overlap)
+
+
+# pdf("mice-inject/plots/gene_expr_DEG_mod98.pdf", height=2.1, width=5.5)
+# pdf("mice-inject/plots/gene_expr_DEG_mod98.pdf", height=2.1, width=6.0)
+pdf("mice-inject/plots/gene_expr_DEG_mod98.pdf", height=2.1, width=6.0)
+# pdf("mice-inject/plots/gene_expr_DEG_mod98.pdf", height=2.1, width=7.0)
 par(mfrow=c(1, 4))
 plotExpr("Dhcr7", cpm_norm)
-plotExpr("Fam213a", cpm_norm)
-plotExpr("Rdh11", cpm_norm)
 plotExpr("Dhcr24", cpm_norm)
+plotExpr("Lss", cpm_norm)
+# plotExpr("Fam213a", cpm_norm)
+plotExpr("Hmgcs1", cpm_norm)
 dev.off()
+
+
+par(mfrow=c(1, 4))
+plotExpr("Dhcr7", count_norm)
+plotExpr("Fam213a", count_norm)
+plotExpr("Rdh11", count_norm)
+plotExpr("Dhcr24", count_norm)
+
 
 
 plotExpr("Rxra", cpm_norm)
@@ -289,6 +458,25 @@ plotExpr("Abcc3", cpm_norm)
 plotExpr("Derl3", cpm_norm)
 
 plotExpr("Etnppl", cpm_norm)
+
+plotExpr("Acat3", cpm_norm)
+plotExpr("Tnnt2", cpm_norm)
+plotExpr("Gja1", cpm_norm)
+
+plotExpr("Tpm1", cpm_norm)
+
+plotExpr("Hmgcs1", cpm_norm)
+
+plotExpr("Taf15", cpm_norm)
+
+plotExpr("Npc1", cpm_norm)
+
+plotExpr("Hmgcs1", cpm_norm)
+
+plotExpr("Pcsk9", cpm_norm)
+plotExpr("Hmgcr", cpm_norm)
+
+plotExpr("Ldlr", cpm_norm)
 	
 
 # values = lapply(values, log2)
@@ -325,46 +513,6 @@ text(pca$x[, i], pca$x[, j], labels=colnames(count_mat),
 )
 
 
-
-# Module 98 targeted
-# ------------------------------------------
-library(metap)
-
-mod_tab = fread("co-expression/tables/modules.csv")
-
-genes98 = mod_tab$gene_symbol[mod_tab$clust == 98]
-
-results_mod98 = lapply(results, function(res) {
-	res[res$hgnc_symbol %in% genes98, ]
-})
-
-
-lapply(results_mod98, as.data.frame)
-
-lapply(results_mod98, function(res) {
-	# sumz(res$pvalue)  # Stouffer metap
-	sumlog(res$pvalue)  # Fisher's
-})
-
-
-par(mfrow=c(3, 1))
-for (i in 1:3) {
-	n = nrow(results_mod98[[i]])
-	pvals = results_mod98[[i]]$pvalue
-	plot(
-		-log10(pvals),
-		pch=16,
-		bty="n"
-	)
-	abline(h=-log10(0.05), col="grey", lty=2)
-
-	idx = pvals < 0.05
-	text(-log10(pvals[idx]),
-		xpd=TRUE,
-		labels=results_mod98[[i]]$mgi_symbol[idx],
-		pos=4
-	)
-}
 
 
 # Correlation matrices
@@ -459,13 +607,15 @@ dev.off()
 gene2 = "Dhcr7"
 gene1 = "Pcsk9"
 
+# gene1 = "Hmgcs1"
+
 pdf(paste0("mice-inject/plots/scatter_", gene1, gene2, ".pdf"),
-	width=3.5, height=4.0)
+	width=3.7, height=4.0)
 i = rownames(count_norm) == gene1
 j = rownames(count_norm) == gene2
 
 
-colors = brewer.pal(9, "Set1")[c(1:3, 9)]
+colors = brewer.pal(9, "Set1")[c(1:4, 9)]
 levels(samples$condition)
 pts_col = colors[as.integer(samples$condition)]
 
@@ -493,5 +643,88 @@ dev.off()
 
 
 
+# Bayesian network edge correlations
+# ------------------------------------------
+library(plyr)
+
+# Load bayesian network
+bnet = fread("co-expression/annotate/bayesNet/all.tsv")
+bnet_nodes = fread("co-expression/annotate/bayesNet/nodes.tsv")
+
+# Subnetwork 98
+bnet98 = bnet[
+	bnet$TAIL %in% bnet_nodes$NODE[bnet_nodes$MODULE == 98] |
+	bnet$HEAD %in% bnet_nodes$NODE[bnet_nodes$MODULE == 98],
+]
+
+bnet98$from = sapply(strsplit(bnet98$HEAD, "_"), function(x) x[2])
+bnet98$to = sapply(strsplit(bnet98$TAIL, "_"), function(x) x[2])
+
+# Copy expression matrix, for human rownames (gene symbols)
+cpm_norm_human = cpm_norm
+rownames(cpm_norm_human) = mouse2human(rownames(cpm_norm))
 
 
+cpm_norm_human = log2(cpm_norm_human + 1)
+
+netw_idx = cbind(
+	match(bnet98$from, rownames(cpm_norm_human)),
+	match(bnet98$to, rownames(cpm_norm_human))
+)
+
+complete = apply(netw_idx, 1, function(idx) !any(is.na(idx)))
+netw_idx = netw_idx[complete, ]
+
+
+
+# Veh + all perturbations
+sample_idx = samples$condition != "Veh"
+cor_tests_pert = alply(netw_idx, 1, function(row_pairs) {
+	i = row_pairs[1]
+	j = row_pairs[2]
+	cor_test = cor.test(cpm_norm_human[i, sample_idx], cpm_norm_human[j, sample_idx])
+	cor_test$id = paste(rownames(cpm_norm_human)[i], rownames(cpm_norm_human)[j], sep="_")
+	return(cor_test)
+})
+
+
+# Veh only
+sample_idx = samples$condition == "Veh"
+cor_tests_veh = alply(netw_idx, 1, function(row_pairs) {
+	i = row_pairs[1]
+	j = row_pairs[2]
+	cor_test = cor.test(cpm_norm_human[i, sample_idx], cpm_norm_human[j, sample_idx])
+	cor_test$id = paste(rownames(cpm_norm_human)[i], rownames(cpm_norm_human)[j], sep="_")
+	return(cor_test)
+})
+
+
+pdf("mice-inject/plots/regulatory_interactions_98_boxplot.pdf", width=2.5, height=4)
+# x = sapply(cor_tests_veh, function(x) x$p.value)
+# x = -log10(x)
+
+x = sapply(cor_tests_veh, function(x) x$estimate)
+x = abs(x)
+
+# y = sapply(cor_tests_veh, function(x) x$p.value)
+# y = -log10(x)
+
+y = sapply(cor_tests_pert, function(x) x$estimate)
+y = abs(y)
+
+t_test = t.test(x, y, paired=TRUE)
+colors = brewer.pal(9, "Set1")
+boxplot(list(Veh=x, "FSTL3+LBP+EPDR1+FCN2"=y),
+	# ylab="|r|",
+	las=2,
+	frame=FALSE,
+	# col=colors,
+	ylab=paste0("Module 98 regulatory interactions (|r|, m=", nrow(netw_idx), ")"),
+	main=paste0("P=", format(t_test$p.value, digits=4))
+)
+
+points(rep(1, length(x)), x, col=colors[1], cex=0.5)
+points(rep(2, length(y)), y, col=colors[2], cex=0.5)
+
+segments(1, x, 2, y, col=rgb(0, 0, 0, 0.3))
+dev.off()

@@ -16,7 +16,7 @@ library(compiler)
 enableJIT(3)
 
 data_dir = "/Users/sk/DataProjects/cross-tissue"  # root of data directory
-setwd("	~/Google Drive/projects/STARNET/cross-tissue")
+setwd("	~/GoogleDrive/projects/STARNET/cross-tissue")
 
 source("src/models/regr.R")  # regression models
 source("src/models/cor.R")
@@ -129,30 +129,6 @@ olink_qmat = sapply(olink_cor[-1], function(x) x$qval)
 colnames(olink_pmat) = sapply(strsplit(colnames(olink_pmat), "_"), function(x) x[2])
 
 
-i = 78
-pdf(paste0("co-expression/annotate/plots/olink/mod", i, ".pdf"), width=10, height=5)
-par(mfrow=c(1, 2))
-
-olink_pmat[, colnames(olink_pmat) == "LEP"]
-
-barplot(-log10(sort(olink_pmat[i, olink_qmat[i, ] < 0.1])),
-	main=paste("Module", i),
-	ylab=expression("-log" [10] * " p"),
-	las=2)
-
-plot(
-	olink_matched[["189_LEP"]], 
-	between$bwnet$eigengenes[, i],
-	xlab="LEP",
-	ylab=paste("Module", i),
-	pch=16,
-	cex=0.5,
-)
-cor.test(
-	as.numeric(olink_matched[["189_LEP"]]), 
-	between$bwnet$eigengenes[, i]
-)
-dev.off()
 
 
 

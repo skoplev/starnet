@@ -2,6 +2,7 @@
 # mat: matrix with features in columns, such as eigengenes or 
 # Returns a table of selected statistics from cor.test
 phenoCorTest = function(mat, pheno_matched, phenotypes=NA) {
+	require(qvalue)
 	if (nrow(mat) != nrow(pheno_matched)) {
 		stop("Dimension mismatch, row number of mat and pheno_matched should be identicial.")
 	}

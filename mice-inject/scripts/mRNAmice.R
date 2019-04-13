@@ -11,6 +11,8 @@ library(UpSetR)
 
 setwd("~/GoogleDrive/projects/STARNET/cross-tissue")
 
+source("src/models/cor.R")
+
 # counts = fread("mice-inject/data/feature_counts/gene_counts.txt")
 counts = fread("mice-inject/data/feature_counts_all/gene_counts.txt")
 
@@ -173,8 +175,6 @@ dev.off()
 
 # Pathway enrichment, from Enrichr
 # -------------------------------------
-
-
 kegg_fcn2 = fread("mice-inject/DEG_all/enrichr/KEGG/FCN2_KEGG_2016_table.txt")
 kegg_lbp = fread("mice-inject/DEG_all/enrichr/KEGG/LBP_KEGG_2016_table.txt")
 kegg_fstl3 = fread("mice-inject/DEG_all/enrichr/KEGG/FSTL3_KEGG_2016_table.txt")
@@ -286,18 +286,7 @@ cpm_norm = cpm(count_mat[include, ])
 rownames(cpm_norm) = getGeneSymbol(rownames(cpm_norm))
 
 
-# count_norm[rownames(count_norm) == "Tnnt2", ]
-
-# cpm_norm[rownames(cpm_norm) == "Tnnt2", ]
-
-# count_norm[rownames(count_norm) == "Pcsk9", ]
-
-# count_mat[include, ][rownames(count_norm) == "Pcsk9", ]
-# count_mat[include, ][rownames(count_norm) == "Tnnt2", ]
-# count_mat[include, ][rownames(count_norm) == "Pln", ]
-
-
-# Module 98 targeted
+# Module 98 targeted analysis
 # ------------------------------------------
 library(metap)
 
@@ -477,18 +466,6 @@ plotExpr("Pcsk9", cpm_norm)
 plotExpr("Hmgcr", cpm_norm)
 
 plotExpr("Ldlr", cpm_norm)
-	
-
-# values = lapply(values, log2)
-
-boxplot(values, frame=FALSE, las=2)
-
-boxplot(values, las=2)
-
-plot(sapply(values, mean))
-
-
-plotmeans(values)
 
 
 # Principal component analysis (PCA)
@@ -511,8 +488,6 @@ text(pca$x[, i], pca$x[, j], labels=colnames(count_mat),
 	pos=1,
 	col="grey"
 )
-
-
 
 
 # Correlation matrices
@@ -552,7 +527,6 @@ names(cmats_rand) = levels(samples$condition)
 i = 2
 # i = 3
 # i = 4
-
 
 cond = names(cmats)[i]
 pdf(paste0("mice-inject/plots/", cond, "_cor_mat_heatmap.pdf"))
@@ -600,6 +574,95 @@ heatmap.2(
 	cexCol=0.7
 )
 dev.off()
+
+
+# Correlation matrix permutation tests
+# -----------------------------------------
+library(sva)
+
+min_expr = 4  # log2 norm counts adjusted, 
+
+genes98 = mod_tab$gene_symbol[mod_tab$clust == 98]
+genes78 = mod_tab$gene_symbol[mod_tab$clust == 78]
+
+# Translate mouse->human gene symbols
+count_norm_human = count_norm
+rownames(count_norm_human) = mouse2human(rownames(cpm_norm))
+
+
+# Pseudo-log transform
+count_norm_human = log2(count_norm_human + 1)
+
+# Batch correction
+count_norm_human = ComBat(count_norm_human, samples$day)
+
+# Filter out low expression 
+count_norm_human = count_norm_human[apply(count_norm_human, 1, median) > min_expr, ]
+
+# Get submatrices
+mat98 = count_norm_human[rownames(count_norm_human) %in% genes98, ]
+mat78 = count_norm_human[rownames(count_norm_human) %in% genes78, ]
+
+
+# Construct samples indicies for running permutation tests
+sample_idx = lapply(unique(samples$condition), function(cond) {
+	samples$condition == cond
+})
+names(sample_idx) = unique(samples$condition)
+
+sample_idx$all = !is.na(samples$condition)
+
+
+m = 10000
+
+cor_tests98 = lapply(sample_idx, function(idx) {
+	corPermuteTest(mat98[, idx], count_norm_human[, idx], m=m)
+})
+
+cor_tests78 = lapply(sample_idx, function(idx) {
+	corPermuteTest(mat78[, idx], count_norm_human[, idx], m=m)
+})
+
+
+plotPermTest = function(test, ...) {
+	hist(test$cor_mean_null,
+		breaks=20,
+		xlim=range(c(test$cor_mean_null, test$cor_mean)),
+		ylab="",
+		# xlab="Mean |r|",
+		...)
+
+	legend("topright",
+		bty="n",
+		legend=paste0("P = ", format(test$p_val, digits=4))
+	)
+	abline(v=test$cor_mean, lwd=1.5)
+}
+
+
+colors = brewer.pal(9, "Set1")[-6]
+colors_light = brewer.pal(9, "Pastel1")[-6]
+
+col_idx = c(1:4, 9, 7)
+colors = brewer.pal(9, "Set1")[col_idx]
+colors_light = brewer.pal(9, "Pastel1")[col_idx]
+
+
+pdf("mice-inject/plots/mod78_98_mean_cor_permutation_test.pdf", height=4, width=10)
+par(mfrow=c(2, 6))
+for (i in 1:length(cor_tests78)) {
+	plotPermTest(cor_tests78[[i]], main=names(cor_tests78)[i],
+		xlab="Module 78 mean |r|",
+		border=colors[i], col=colors_light[i])
+}
+
+for (i in 1:length(cor_tests98)) {
+	plotPermTest(cor_tests98[[i]], main=names(cor_tests98)[i],
+		xlab="Module 98 mean |r|",
+		border=colors[i], col=colors_light[i])
+}
+dev.off()
+
 
 # Individual correlations
 # ---------------------------------------------

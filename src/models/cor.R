@@ -67,3 +67,72 @@ phenoCorTest = function(mat, pheno_matched, phenotypes=NA) {
 	}
 	return(pheno_cor)
 }
+
+
+# Mean correlation coefficient permutation test.
+# type is "rows" or "columns"
+corPermuteTest = function(mat, null_mat, m=1000, type="rows") {
+	require(WGCNA)  # for fast cor()
+	# Test input
+	if (! type %in% c("rows", "cols")) {
+		stop("Invalid type specified: ", type)
+	}
+
+	if (type == "cols") {
+		if (nrow(mat) != nrow(null_mat)) {
+			stop("Matrix row mismatch for column perturbation")
+		}
+	}
+
+	cmat = cor(
+		t(mat),
+		use="pairwise.complete.obs")
+	cmat = abs(cmat)
+
+	cor_coeff = cmat[lower.tri(cmat)]  # only include correlation coefficients once, and no self-correlation 
+	cor_coeff_mean = mean(cor_coeff, na.rm=TRUE)
+
+	# mat_gene_symbols = getGeneSymbols(rownames(mat))
+	perm_cor_coeff_mean = sapply(1:m, function(i) {
+		if (i %% 100 == 0) {
+			message("Iter ", i, " out of ", m)
+		}
+
+		if (type == "rows") {
+			# Pick random set of genes from null mat of same size as genes in input mat
+			rand_genes = sample(
+				x=nrow(null_mat),
+				size=nrow(mat))
+
+			mat_perm = null_mat[rand_genes, ]
+
+		} else if (type == "cols") {
+			rand_cols = sample(
+				x=ncol(null_mat),
+				size=ncol(mat))
+
+			mat_perm = null_mat[, rand_cols]
+		} else {
+			stop("")  # redundant stop
+		}
+
+		cmat_perm = cor(
+			t(mat_perm),
+			use="pairwise.complete.obs")
+
+		cmat_perm = abs(cmat_perm)
+
+		cor_coeff_perm = cmat_perm[lower.tri(cmat_perm)]
+
+		return(mean(cor_coeff_perm, na.rm=TRUE))
+	})
+
+	# Estimate p-value, or bound
+	p_est = max(mean(cor_coeff_mean < perm_cor_coeff_mean), 1/m)
+
+	return(list(
+		cor_mean=cor_coeff_mean,
+		cor_mean_null=perm_cor_coeff_mean,
+		p_val=p_est)
+	)
+}

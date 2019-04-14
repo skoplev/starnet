@@ -99,9 +99,24 @@ results = lapply(endocrines, function(pert) {
 names(results) = endocrines
 
 
+# Write log2 FC rankings
+for (i in 1:length(results)) {
+	res = results[[i]]
+
+	res = res[order(res$log2FoldChange, decreasing=TRUE), ]
+
+	# Remove emtpy gene symbols
+	res = res[!is.na(res$hgnc_symbol) & res$hgnc_symbol != "", ]
+
+	write.table(res[, c("hgnc_symbol", "log2FoldChange")],
+		paste0("mice-inject/DEG_ranking_all/log2FC_", names(results)[i], ".rnk"),
+		quote=FALSE,
+		row.names=FALSE,
+		sep="\t"
+	)
+}
 
 head(data.frame(results[[4]]), 20)
-
 head(data.frame(results[[4]][results[[4]]$log2FoldChange > 0, ]), 20)
 
 

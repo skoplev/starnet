@@ -581,14 +581,14 @@ dev.off()
 library(sva)
 
 min_expr = 4  # log2 norm counts adjusted, 
+m = 10000  # number of permutations
 
 genes98 = mod_tab$gene_symbol[mod_tab$clust == 98]
 genes78 = mod_tab$gene_symbol[mod_tab$clust == 78]
 
 # Translate mouse->human gene symbols
 count_norm_human = count_norm
-rownames(count_norm_human) = mouse2human(rownames(cpm_norm))
-
+# rownames(count_norm_human) = mouse2human(rownames(cpm_norm))
 
 # Pseudo-log transform
 count_norm_human = log2(count_norm_human + 1)
@@ -600,8 +600,11 @@ count_norm_human = ComBat(count_norm_human, samples$day)
 count_norm_human = count_norm_human[apply(count_norm_human, 1, median) > min_expr, ]
 
 # Get submatrices
-mat98 = count_norm_human[rownames(count_norm_human) %in% genes98, ]
-mat78 = count_norm_human[rownames(count_norm_human) %in% genes78, ]
+# mat98 = count_norm_human[rownames(count_norm_human) %in% genes98, ]
+# mat78 = count_norm_human[rownames(count_norm_human) %in% genes78, ]
+
+mat98 = count_norm_human[mouse2human(rownames(count_norm_human)) %in% genes98, ]
+mat78 = count_norm_human[mouse2human(rownames(count_norm_human)) %in% genes78, ]
 
 
 # Construct samples indicies for running permutation tests
@@ -613,8 +616,7 @@ names(sample_idx) = unique(samples$condition)
 sample_idx$all = !is.na(samples$condition)
 
 
-m = 10000
-
+# Run permutation tests per co-expression module
 cor_tests98 = lapply(sample_idx, function(idx) {
 	corPermuteTest(mat98[, idx], count_norm_human[, idx], m=m)
 })
@@ -622,6 +624,7 @@ cor_tests98 = lapply(sample_idx, function(idx) {
 cor_tests78 = lapply(sample_idx, function(idx) {
 	corPermuteTest(mat78[, idx], count_norm_human[, idx], m=m)
 })
+save(cor_tests98, cor_tests78, file="mice-inject/data/permuteTest/cor_tests.RData")
 
 
 plotPermTest = function(test, ...) {
@@ -640,13 +643,9 @@ plotPermTest = function(test, ...) {
 }
 
 
-colors = brewer.pal(9, "Set1")[-6]
-colors_light = brewer.pal(9, "Pastel1")[-6]
-
 col_idx = c(1:4, 9, 7)
 colors = brewer.pal(9, "Set1")[col_idx]
 colors_light = brewer.pal(9, "Pastel1")[col_idx]
-
 
 pdf("mice-inject/plots/mod78_98_mean_cor_permutation_test.pdf", height=4, width=10)
 par(mfrow=c(2, 6))
@@ -663,6 +662,62 @@ for (i in 1:length(cor_tests98)) {
 }
 dev.off()
 
+
+# Correlation analysis for module 98 genes
+# -----------------------------------------------
+cmat = corAndPvalue(t(mat98))
+
+# cmat = corAndPvalue(t(mat98[, sample_idx$FSTL3]))
+# cmat = corAndPvalue(t(mat98[, sample_idx$Veh]))
+# cmat = corAndPvalue(t(mat98[, sample_idx$LBP]))
+# cmat = corAndPvalue(t(mat98[, sample_idx$FCN2]))
+# cmat = corAndPvalue(t(mat98[, sample_idx$EPDR1]))
+
+# Bonferoni with effective parameters
+cmat$padj = matrix(cmat$p * sum(lower.tri(cmat$p)), nrow=nrow(cmat$p))
+diag(cmat$padj) = NA
+
+sum(cmat$padj[lower.tri(cmat$padj)] < 0.05, na.rm=TRUE)
+
+pdf("mice-inject/plots/mod98_cor_heatmap.pdf", height=5)
+note = matrix("", nrow=nrow(cmat$cor), ncol=ncol(cmat$cor))
+note[cmat$padj < 0.05] = "*"
+
+heatmap.2(cmat$cor,
+	mar=c(4, 13),
+	xlab="Module 98 genes",
+	ylab="Module 98 genes",
+	col=colorRampPalette(rev(brewer.pal(9, "RdBu")))(100),
+	key.title="",
+	key.xlab="Pearson cor.",
+	cellnote=note,
+	notecol="black",
+	cexRow=0.5, cexCol=0.5,
+	trace="none",
+	tracecol="black"
+)
+dev.off()
+
+
+# Module 98 gene PCA
+# Uses normalization defined above
+# ----------------------------------------------
+pca98 = prcomp(t(mat98), scale=TRUE)
+
+pdf("mice-inject/plots/mod98_pca.pdf", width=3.7, height=4)
+colors = c(brewer.pal(9, "Set1")[1:4], "white")
+conditions = factor(samples$condition, levels=c("EPDR1", "FCN2", "LBP", "FSTL3", "Veh"))
+pt_col = colors[as.integer(conditions)]
+
+
+plot(pca98$x[, 1], pca98$x[, 2],
+	main=paste0("Module 98 genes (g=", nrow(mat98), ")"),
+	xlab=paste0("PC1 (", summary(pca98)$importance[2, 1] * 100, "%)"),
+	ylab=paste0("PC2 (", summary(pca98)$importance[2, 2] * 100, "%)"),
+	bg=pt_col, pch=21)
+
+legend("topleft", legend=levels(conditions), pch=21, pt.bg=colors)
+dev.off()
 
 # Individual correlations
 # ---------------------------------------------

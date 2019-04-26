@@ -7,6 +7,10 @@ library(biomaRt)
 library(limma)  # for vennDiagram
 library(gplots)
 library(UpSetR)
+library(edgeR)
+library(metap)
+library(pwr)
+library(sva)
 
 
 setwd("~/GoogleDrive/projects/STARNET/cross-tissue")
@@ -287,23 +291,23 @@ dev.off()
 
 # Normalization based on size factors
 # ---------------------------------------
-# sizeFactors(dds)
-
-library(edgeR)
 
 count_norm = sweep(count_mat[include, ], 2, sizeFactors(dds), "/")
 
 rownames(count_norm) = getGeneSymbol(rownames(count_norm))
 
-# cpm_norm = cpm(count_norm)
+count_norm_batch = ComBat(count_norm, samples$day)
+
 
 cpm_norm = cpm(count_mat[include, ])
 rownames(cpm_norm) = getGeneSymbol(rownames(cpm_norm))
 
+# Write normalized gene expression matrix
+write.csv(count_norm_batch, "mice-inject/data/count_norm_batch.csv")
+
 
 # Module 98 targeted analysis
 # ------------------------------------------
-library(metap)
 
 mod_tab = fread("co-expression/tables/modules.csv")
 
@@ -340,8 +344,6 @@ for (i in 1:4) {
 		pos=4
 	)
 }
-
-
 
 
 # UpSet plot of overlaps with DEGs
@@ -508,7 +510,7 @@ text(pca$x[, i], pca$x[, j], labels=colnames(count_mat),
 # Correlation matrices
 # ------------------------------------------
 
-library(pwr)
+# Power calculation
 pwr.r.test(n=4, sig.level=0.1, power=0.8)
 
 genes98 = mod_tab$gene_symbol[mod_tab$clust == 98]
@@ -543,6 +545,7 @@ i = 2
 # i = 3
 # i = 4
 
+# Heatmap plots of correlation coefficients
 cond = names(cmats)[i]
 pdf(paste0("mice-inject/plots/", cond, "_cor_mat_heatmap.pdf"))
 # pdf(paste0("mice-inject/plots/", cond, "_cor_mat_heatmap_rand.pdf"))
@@ -570,16 +573,17 @@ dev.off()
 cmat = cor(t(log10(count_norm[idx, ] + 1)))
 
 rand_idx = sample(nrow(count_norm), size=length(idx))
+
 cmat_rand = cor(t(
 	log10(count_norm[rand_idx, ] + 1)
 ))
 
 
-# pdf("mice-inject/plots/cor_mat_heatmap.pdf")
-pdf("mice-inject/plots/cor_mat_heatmap_rand.pdf")
+pdf("mice-inject/plots/cor_mat_heatmap.pdf")
+# pdf("mice-inject/plots/cor_mat_heatmap_rand.pdf")
 heatmap.2(
-	# cmat,
-	cmat_rand,
+	cmat,
+	# cmat_rand,
 	trace="none",
 	col=colorRampPalette(rev(brewer.pal(9, "RdBu")))(100),
 	main=names(cmats)[i],
@@ -593,7 +597,6 @@ dev.off()
 
 # Correlation matrix permutation tests
 # -----------------------------------------
-library(sva)
 
 min_expr = 4  # log2 norm counts adjusted, 
 m = 10000  # number of permutations
@@ -744,16 +747,20 @@ gene1 = "Pcsk9"
 
 pdf(paste0("mice-inject/plots/scatter_", gene1, gene2, ".pdf"),
 	width=3.7, height=4.0)
-i = rownames(count_norm) == gene1
-j = rownames(count_norm) == gene2
+# mat = count_norm
+mat = count_norm_batch
+
+i = which(rownames(mat) == gene1)
+j = which(rownames(mat) == gene2)
 
 
-colors = brewer.pal(9, "Set1")[c(1:4, 9)]
+# colors = brewer.pal(9, "Set1")[c(1:4, 9)]
+colors = c(brewer.pal(9, "Set1")[c(1, 2, 4, 3)], "white")
 levels(samples$condition)
 pts_col = colors[as.integer(samples$condition)]
 
-x = count_norm[i, ]
-y = count_norm[j, ]
+x = mat[i, ]
+y = mat[j, ]
 
 cor_test = cor.test(x, y)
 

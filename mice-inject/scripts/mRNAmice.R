@@ -35,6 +35,8 @@ samples = data.frame(
 	condition=factor(sapply(strsplit(colnames(count_mat), "_"), function(x) x[1]))
 )
 
+write.csv(samples, "mice-inject/data/samples_meta.csv", row.names=FALSE)
+
 # Map gene names
 mart = useMart("ensembl", dataset="mmusculus_gene_ensembl")
 

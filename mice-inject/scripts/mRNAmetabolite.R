@@ -178,7 +178,7 @@ y = metab_mat_match[, j]
 
 scatterPlot(x, y,
 	xlab=paste0(rownames(count_norm)[i], "(adj. counts)"),
-	ylab=ylab
+	ylab=colnames(metab_mat_match)[j]
 )
 
 

@@ -58,7 +58,9 @@ bn_bootstrap = lapply(1:bootstrap_m, function(k) {
 	return(out)
 })
 
-save(bn_bootstrap, file="co-expression/eigenNetw/v3/bn_bootstrap_all.RData")
+# save(bn_bootstrap, file="co-expression/eigenNetw/v3/bn_bootstrap_all.RData")
+load("co-expression/eigenNetw/v3/bn_bootstrap_all.RData")
+
 	
 # Calculate average bootstrapped adjacency matrix
 bn_bootstrap_adjmat = lapply(bn_bootstrap, function(bn) {
@@ -114,8 +116,62 @@ snetw$to_class = module_tab$class[snetw$to]
 snetw$from_to_class = paste(snetw$from_class, snetw$to_class, sep=" -> ")
 
 
+# Plot of CT -> TS interactions
+# ----------------------------------
+# sum(snetw$from_to_class == "CT -> TS")
 
-# Centrality
+tissue_col = brewer.pal(9, "Set1")[-6][c(1, 5, 6, 4, 7, 3, 2)]
+tissues = c("AOR", "MAM", "LIV", "VAF", "SF", "SKLM", "BLOOD")
+
+# Fraction of tissues
+tissue_counts = data.frame(module_tab)[, tissues]
+
+tissue_frac = tissue_counts / apply(tissue_counts, 1, sum)
+tissue_frac = as.matrix(tissue_frac)
+
+module_tab$primary_tissue = colnames(tissue_frac)[apply(tissue_frac, 1, which.max)]
+
+# Sort significant supernetwork edges by target tissue
+snetw$to_tissue = factor(module_tab$primary_tissue[snetw$to], levels=tissues)
+
+pdf("co-expression/eigenNetw/v3/plots/bootstrap_supernetw_by_tissue.pdf", height=6.0, width=4.0)
+snetw = snetw[order(snetw$to_tissue, decreasing=TRUE), ]
+
+idx = snetw$from_to_class == "CT -> TS"
+
+# par(mfrow=c(2, 1), mar=c(3, 4, 2, 3))
+par(mfrow=c(1, 2), mar=c(3, 4, 2, 3))
+barplot(
+	t(tissue_frac[snetw$from[idx], ]),
+	main="From",
+	col=tissue_col,
+	names.arg=snetw$from[idx],
+	las=2,
+	legend.text=colnames(tissue_frac),
+	space=0,
+	horiz=TRUE,
+	border=rgb(50, 50, 50, maxColorValue=255),
+	cex.names=0.8
+)
+
+barplot(
+	t(tissue_frac[snetw$to[idx], ]),
+	main="To",
+	col=tissue_col,
+	names.arg=snetw$to[idx],
+	las=2,
+	legend.text=colnames(tissue_frac),
+	space=0,
+	border=rgb(50, 50, 50, maxColorValue=255),
+	horiz=TRUE,
+	cex.names=0.8
+)
+dev.off()
+
+
+
+# Centrality of bootstrap eigennetwork
+# ------------------------------------------
 boot_p_bound = boot_p
 boot_p_bound[boot_p_bound == 0] = 1/bootstrap_m
 

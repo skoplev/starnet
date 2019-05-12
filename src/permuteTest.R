@@ -1,4 +1,5 @@
 findMouseHomologue = function(genes, human_homology, mouse_homology) {
+	require(tools)
 	# Map to Homologene IDs
 	homologene_ids = human_homology[["HomoloGene ID"]][
 		match(genes, human_homology$Symbol)
@@ -8,6 +9,11 @@ findMouseHomologue = function(genes, human_homology, mouse_homology) {
 	mouse_symbol = mouse_homology$Symbol[
 		match(homologene_ids, mouse_homology[["HomoloGene ID"]])
 	]
+
+
+	missing = is.na(mouse_symbol)
+
+	mouse_symbol[missing] = toTitleCase(tolower(genes[missing]))  # capitalize first letter
 
 	return(mouse_symbol)
 }

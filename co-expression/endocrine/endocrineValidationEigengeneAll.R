@@ -15,6 +15,9 @@ source("src/parse.R")
 data_dir = "/Users/sk/DataProjects/cross-tissue"  # root of data directory
 
 
+# Load gene expression data
+# ---------------------------------------------
+
 # Load and parse HMDP gene expression data
 hmdp = lapply(list.files(file.path(data_dir, "HMDP/chow_HF")),
 	function(file_name) {
@@ -36,7 +39,39 @@ hmdp = lapply(list.files(file.path(data_dir, "HMDP/chow_HF")),
 })
 names(hmdp) = list.files(file.path(data_dir, "HMDP/chow_HF"))
 
-# sapply(hmdp, dim)
+
+# Load GTEx
+
+gtex = list()
+gtex$mat = fread("~/DataBases/GTEx/RNA-seq/GTEx_Analysis_2016-01-15_v7_RNASeQCv1.1.8_gene_tpm.gct")
+gtex$genes = gtex$mat[, 1:2]
+gtex$mat = data.matrix(gtex$mat[, c(-1, -2)])
+rownames(gtex$mat) = make.names(gtex$genes$Description, unique=TRUE)
+
+gtex$annot = fread("~/DataBases/GTEx/RNA-seq/GTEx_v7_Annotations_SampleAttributesDS.txt")
+
+# Match annotation table to column names
+# note that first two columns of mat are dummy IDs
+gtex$annot = gtex$annot[match(colnames(gtex$mat), gtex$annot$SAMPID), ]
+
+gtex$annot$gtex.ID = sapply(strsplit(gtex$annot$SAMPID, "-"), function(x) paste(x[1], x[2], sep="-"))
+
+
+# Extract and match gene tissue-specific gene expression matrices
+getGtex = function(idx) {
+	mat = gtex$mat[, idx]
+	colnames(mat) = gtex$annot$gtex.ID[idx]
+	return(mat)
+}
+
+gtex$LIV_mat = getGtex(gtex$annot$SMTSD == "Liver")
+gtex$SF_mat = getGtex(gtex$annot$SMTSD == "Adipose - Subcutaneous")
+gtex$VAF_mat = getGtex(gtex$annot$SMTSD == "Adipose - Visceral (Omentum)")
+
+# Match to LIV
+gtex$SF_mat = gtex$SF_mat[, match(colnames(gtex$LIV_mat), colnames(gtex$SF_mat))]
+gtex$VAF_mat = gtex$VAF_mat[, match(colnames(gtex$LIV_mat), colnames(gtex$VAF_mat))]
+
 
 
 # Select all of FDR threshold endocrine candidates
@@ -83,7 +118,7 @@ endo[endo$clust == 78 & endo$target_clust == 98, ]
 endoEigenCor = function(target_mat, mod_tab, source_mat, endocrines) {
 
 	stopifnot(c("gene_symbol", "clust") %in% colnames(mod_tab))
-	stopifnot(rownames(target_mat) == rownames(source_mat))
+	stopifnot(na.exclude(rownames(target_mat) == rownames(source_mat)))
 
 	# Get assigned clusters of target expression matrix
 	idx = match(colnames(target_mat), mod_tab$gene_symbol)
@@ -106,9 +141,9 @@ endoEigenCor = function(target_mat, mod_tab, source_mat, endocrines) {
 
 
 # Adds correlation statistics to endocrine table
-annotateEndoEigenCor = function(endo, cor_stats, prefix) {
+annotateEndoEigenCor = function(endo, cor_stats, prefix, gene_column) {
 	# Annotate endocrine table
-	row_idx = match(endo$mouse_symbol, rownames(cor_stats$p))
+	row_idx = match(endo[[gene_column]], rownames(cor_stats$p))
 	col_idx = match(endo$target_clust, colnames(cor_stats$p))
 
 	# endo$HMDP_chow_ts_endo_cor = cor_stats$cor[cbind(row_idx, col_idx)]
@@ -118,7 +153,6 @@ annotateEndoEigenCor = function(endo, cor_stats, prefix) {
 	return(endo)
 }
 
-
 # Calculate eigengenes for all liver modules
 idx = modules$tissue == "LIV"
 modules_LIV_mouse = data.frame(
@@ -126,50 +160,81 @@ modules_LIV_mouse = data.frame(
 	clust=modules$clust[idx])
 
 endo78_98 = endo[endo$clust == 78 & endo$target_clust == 98, ]
-endocrines = endo78_98$mouse_symbol
+endocrines_mouse = endo78_98$mouse_symbol
+# endocrines_mouse = endo78_98$mouse_symbol
+
+
+# HMDP
+# --------------------------------------------
+
 # # adipose -> liver
 # adipose_liver_endocrines = endo$mouse_symbol[(endo$tissue == "SF" | endo$tissue == "VAF") & endo$target_tissue == "LIV"]
 # adipose_liver_endocrines = as.character(na.omit(adipose_liver_endocrines))
 # adipose_liver_endocrines = unique(adipose_liver_endocrines)
 
-
-# idx = match(colnames(hmdp$Liver_HF_male), modules_LIV$mouse_symbol)
-
-lapply(hmdp, dim)
-
 adipose_liver_HF = endoEigenCor(
 	hmdp$Liver_HF_male,
 	modules_LIV_mouse,
 	hmdp$Adipose_HF_male,
-	# adipose_liver_endocrines
-	endocrines
+	endocrines_mouse
 )
 
-endo78_98 = annotateEndoEigenCor(endo78_98, adipose_liver_HF, "HMDP_HF")
+endo78_98 = annotateEndoEigenCor(endo78_98, adipose_liver_HF, "HMDP_HF", "mouse_symbol")
 
 adipose_liver_chow = endoEigenCor(
 	target_mat=hmdp$Liver_chow_male,
 	mod_tab=modules_LIV_mouse,
 	source_mat=hmdp$Adipose_chow_male,
-	endocrines=endocrines
+	endocrines=endocrines_mouse
 )
 
-endo78_98 = annotateEndoEigenCor(endo78_98, adipose_liver_chow, "HMDP_chow")
+endo78_98 = annotateEndoEigenCor(endo78_98, adipose_liver_chow, "HMDP_chow", "mouse_symbol")
 
 
-# Write table
-endo[idx_78_98, ]
-write.csv(
-	endo[idx_78_98,
-		c("clust", "target_clust", "tissue", "gene_symbol", "mouse_symbol",
-			"ts_endo_cor", "ts_endo_cor_p", "ts_endo_cor_p_adj",
-			"HMDP_HF_ts_endo_cor", "HMDP_HF_ts_endo_cor_p",
-			"HMDP_chow_ts_endo_cor", "HMDP_chow_ts_endo_cor_p")
-	],
-	paste0("co-expression/plots/endocrine/endocrines_module_78_98_validation_heatmap_", endocrine_sel, ".csv"),
-	row.names=FALSE
+# GTEx
+# ------------------------------------------
+
+endocrines_human = endo78_98$gene_symbol
+
+idx = modules$tissue == "LIV"
+modules_LIV_human = data.frame(
+	gene_symbol=modules$gene_symbol[idx],
+	clust=modules$clust[idx])
+
+VAF_liver_gtex = endoEigenCor(
+	# Use subset of gene expression matrix
+	target_mat=t(gtex$LIV_mat[rownames(gtex$LIV_mat) %in% modules_LIV_human$gene_symbol, ]),
+	mod_tab=modules_LIV_human,
+	source_mat=t(gtex$VAF_mat),
+	endocrines=endocrines_human
+)
+endo78_98 = annotateEndoEigenCor(endo78_98, VAF_liver_gtex, "GTEx_VAF", "gene_symbol")
+
+SF_liver_gtex = endoEigenCor(
+	# Use subset of gene expression matrix
+	target_mat=t(gtex$LIV_mat[rownames(gtex$LIV_mat) %in% modules_LIV_human$gene_symbol, ]),
+	mod_tab=modules_LIV_human,
+	source_mat=t(gtex$SF_mat),
+	endocrines=endocrines_human
 )
 
+endo78_98 = annotateEndoEigenCor(endo78_98, SF_liver_gtex, "GTEx_SF", "gene_symbol")
+
+
+
+
+# # Write table
+# endo[idx_78_98, ]
+# write.csv(
+# 	endo[idx_78_98,
+# 		c("clust", "target_clust", "tissue", "gene_symbol", "mouse_symbol",
+# 			"ts_endo_cor", "ts_endo_cor_p", "ts_endo_cor_p_adj",
+# 			"HMDP_HF_ts_endo_cor", "HMDP_HF_ts_endo_cor_p",
+# 			"HMDP_chow_ts_endo_cor", "HMDP_chow_ts_endo_cor_p")
+# 	],
+# 	paste0("co-expression/plots/endocrine/endocrines_module_78_98_validation_heatmap_", endocrine_sel, ".csv"),
+# 	row.names=FALSE
+# )
 
 
 library(devtools)  # for installing heatmap.3
@@ -184,17 +249,16 @@ pdf(paste0("co-expression/plots/endocrine/endocrines_module_78_98_validation_hea
 # idx_78_98 = endo$clust == 78 & endo$target_clust == 98
 
 # endocrine_sel
-# cmat_78_98 = endo[idx_78_98, c("ts_endo_cor", "HMDP_HF_ts_endo_cor", "HMDP_chow_ts_endo_cor")]
-cmat_78_98 = endo78_98[, c("ts_endo_cor", "HMDP_HF_cor", "HMDP_chow_cor")]
-rownames(cmat_78_98) = endo$id[idx_78_98]
+# cmat_78_98 = endo78_98[, c("ts_endo_cor", "HMDP_HF_cor", "HMDP_chow_cor")]
+cmat_78_98 = endo78_98[, c("ts_endo_cor", "HMDP_HF_cor", "HMDP_chow_cor", "GTEx_VAF_cor", "GTEx_SF_cor")]
+rownames(cmat_78_98) = endo78_98$id
 
-colnames(cmat_78_98) = c("STARNET", "HMDP HF", "HMDP chow")
+# colnames(cmat_78_98) = c("STARNET", "HMDP HF", "HMDP chow")
 
+tissues = c("AOR", "BLOOD", "SKLM", "VAF", "MAM", "LIV",  "SF")
+tissue_cols = brewer.pal(9, "Set1")[-6]
 
-# colors = brewer.pal(9, "Set1")[c(8, 4)]
-colors = brewer.pal(9, "Set1")[c(5, 8, 4)]
-
-rlab = colors[as.integer(factor(endo$tissue[idx_78_98]))]
+rlab = tissue_cols[as.integer(factor(endo78_98$tissue, levels=tissues))]
 rlab = as.matrix(rlab)
 colnames(rlab) = "Tissue of origin"
 

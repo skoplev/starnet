@@ -47,6 +47,7 @@ bn = fges(variables, maxDegree=100)  # Fast-greedy equivalence search
 
 g = graph.from.graphNEL(bn$graphNEL)
 
+
 epsilon = 10^-30  # small number
 
 # Add featueres
@@ -100,7 +101,6 @@ V(g)$log_n_within_mod_endocrines[is.infinite(V(g)$log_n_within_mod_endocrines)] 
 write_graph(g,
 	file="co-expression/eigenNetw/v2/bayes_net.gml",
 	format="gml")
-
 
 # Bayesian network of cross-tissue only
 # ---------------------------------------------
@@ -1069,3 +1069,48 @@ library(gplots)
 
 heatmap.2(as.matrix(as_adj(g)), col=c("white", "black"),
 	trace="none")
+
+
+
+# Analysis of supernetwork interactions by CT->TS, ...
+# Post analysis START, not contained in bayesNet2.RData
+# To run this part of the script simply load bayesNet2.RData and start from here
+# ----------------------------
+
+snetw = data.frame(as_edgelist(g), stringsAsFactors=FALSE)
+colnames(snetw) = c("from", "to")
+snetw$from = as.integer(snetw$from)
+snetw$to = as.integer(snetw$to)
+
+tissues = c("AOR", "MAM", "LIV", "VAF", "SF", "SKLM", "BLOOD")
+
+# Fraction of tissues
+tissue_counts = data.frame(module_tab)[, tissues]
+
+tissue_frac = tissue_counts / apply(tissue_counts, 1, sum)
+tissue_frac = as.matrix(tissue_frac)
+
+module_tab$primary_tissue = colnames(tissue_frac)[apply(tissue_frac, 1, which.max)]
+
+snetw$from_tissue = factor(module_tab$primary_tissue[snetw$from], levels=tissues)
+snetw$to_tissue = factor(module_tab$primary_tissue[snetw$to], levels=tissues)
+
+
+module_tab$class[module_tab$purity < 0.95] = "CT"  # cross-tissue
+module_tab$class[module_tab$purity >= 0.95] = "TS"  # tissue-specific
+
+
+# Add CT, TS status
+snetw$from_class = module_tab$class[snetw$from]
+snetw$to_class = module_tab$class[snetw$to]
+
+snetw$from_to_class = paste(snetw$from_class, snetw$to_class, sep=" -> ")
+
+sum(snetw$to_tissue != snetw$from_tissue)
+
+table(snetw$from_to_class[snetw$to_tissue != snetw$from_tissue])
+prop.table(table(snetw$from_to_class[snetw$to_tissue != snetw$from_tissue])) * 100
+
+
+snetw[snetw$to_tissue != snetw$from_tissue, ]
+

@@ -133,6 +133,10 @@ module_tab$primary_tissue = colnames(tissue_frac)[apply(tissue_frac, 1, which.ma
 
 # Sort significant supernetwork edges by target tissue
 snetw$to_tissue = factor(module_tab$primary_tissue[snetw$to], levels=tissues)
+snetw$from_tissue = factor(module_tab$primary_tissue[snetw$from], levels=tissues)
+
+table(snetw$from_to_class[snetw$to_tissue != snetw$from_tissue])
+prop.table(table(snetw$from_to_class[snetw$to_tissue != snetw$from_tissue]))
 
 pdf("co-expression/eigenNetw/v3/plots/bootstrap_supernetw_by_tissue.pdf", height=6.0, width=4.0)
 snetw = snetw[order(snetw$to_tissue, decreasing=TRUE), ]

@@ -6,6 +6,7 @@ library(data.table)
 library(WGCNA)
 library(RColorBrewer)
 library(gplots)
+library(GEOquery)
 
 setwd("~/GoogleDrive/projects/STARNET/cross-tissue")
 
@@ -41,7 +42,6 @@ names(hmdp) = list.files(file.path(data_dir, "HMDP/chow_HF"))
 
 
 # Load GTEx
-
 gtex = list()
 gtex$mat = fread("~/DataBases/GTEx/RNA-seq/GTEx_Analysis_2016-01-15_v7_RNASeQCv1.1.8_gene_tpm.gct")
 gtex$genes = gtex$mat[, 1:2]
@@ -73,8 +73,34 @@ gtex$SF_mat = gtex$SF_mat[, match(colnames(gtex$LIV_mat), colnames(gtex$SF_mat))
 gtex$VAF_mat = gtex$VAF_mat[, match(colnames(gtex$LIV_mat), colnames(gtex$VAF_mat))]
 
 
+# Morbid obesity gene expression
+# ------------------------------------------------------
+# morbid = loadMorbidObesity()
+
+# save(morbid, file="~/DataBases/MorbidObesity/morbid.RData")
+load(file="~/DataBases/MorbidObesity/morbid.RData")
+
+rownames(morbid$emat) = morbid$meta_row$hgnc_symbol
+morbid$emat = t(morbid$emat)
+rownames(morbid$emat) = morbid$sample_annot$MGH.ID
+
+
+# Get submatrices
+morbid$emat_LIV = morbid$emat[morbid$sample_annot$tissue_name == "liver", ]
+morbid$emat_SF = morbid$emat[morbid$sample_annot$tissue_name == "subcutaneous adipose", ]
+morbid$emat_VAF = morbid$emat[morbid$sample_annot$tissue_name == "omental adipose", ]
+
+
+# Match sample IDs to those of liver
+morbid$emat_SF = morbid$emat_SF[match(rownames(morbid$emat_LIV), rownames(morbid$emat_SF)), ]
+morbid$emat_VAF = morbid$emat_VAF[match(rownames(morbid$emat_LIV), rownames(morbid$emat_VAF)), ]
+
+stopifnot(rownames(morbid$emat_LIV) == rownames(morbid$emat_SF))
+stopifnot(rownames(morbid$emat_LIV) == rownames(morbid$emat_VAF))
+
 
 # Select all of FDR threshold endocrine candidates
+# ------------------------------------------------------
 # endocrine_sel = "all"
 endocrine_sel = "FDR"
 
@@ -93,6 +119,7 @@ modules = fread("co-expression/tables/modules.csv")
 
 
 # Load mouse homology and map STARNET gene symbols to mouse gene symbols
+# ------------------------------------------------
 human_mouse_homology = fread(file.path(data_dir, "MGI/HOM_MouseHumanSequence.rpt"))
 
 # Separate table into human and mouse
@@ -106,6 +133,9 @@ mouse_homology = human_mouse_homology[
 modules$mouse_symbol = findMouseHomologue(modules$gene_symbol, human_homology, mouse_homology)
 
 endo$mouse_symbol = findMouseHomologue(endo$gene_symbol, human_homology, mouse_homology)
+
+# Based on old gene symbol (@Marcus)
+endo$mouse_symbol[endo$mouse_symbol == "Fcn2"] = "Fcna"
 
 
 endo[endo$clust == 78 & endo$target_clust == 98, ]
@@ -163,6 +193,13 @@ endo78_98 = endo[endo$clust == 78 & endo$target_clust == 98, ]
 endocrines_mouse = endo78_98$mouse_symbol
 # endocrines_mouse = endo78_98$mouse_symbol
 
+endocrines_human = endo78_98$gene_symbol
+
+idx = modules$tissue == "LIV"
+modules_LIV_human = data.frame(
+	gene_symbol=modules$gene_symbol[idx],
+	clust=modules$clust[idx])
+
 
 # HMDP
 # --------------------------------------------
@@ -194,13 +231,6 @@ endo78_98 = annotateEndoEigenCor(endo78_98, adipose_liver_chow, "HMDP_chow", "mo
 # GTEx
 # ------------------------------------------
 
-endocrines_human = endo78_98$gene_symbol
-
-idx = modules$tissue == "LIV"
-modules_LIV_human = data.frame(
-	gene_symbol=modules$gene_symbol[idx],
-	clust=modules$clust[idx])
-
 VAF_liver_gtex = endoEigenCor(
 	# Use subset of gene expression matrix
 	target_mat=t(gtex$LIV_mat[rownames(gtex$LIV_mat) %in% modules_LIV_human$gene_symbol, ]),
@@ -221,6 +251,25 @@ SF_liver_gtex = endoEigenCor(
 endo78_98 = annotateEndoEigenCor(endo78_98, SF_liver_gtex, "GTEx_SF", "gene_symbol")
 
 
+# Morbid obesity
+# ---------------------------
+
+VAF_liver_morbid = endoEigenCor(
+	target_mat=morbid$emat_LIV[, colnames(morbid$emat_LIV) %in% modules_LIV_human$gene_symbol],
+	mod_tab=modules_LIV_human,
+	source_mat=morbid$emat_VAF,
+	endocrines=endocrines_human
+)
+endo78_98 = annotateEndoEigenCor(endo78_98, VAF_liver_morbid, "Obese_VAF", "gene_symbol")
+
+SF_liver_morbid = endoEigenCor(
+	target_mat=morbid$emat_LIV[, colnames(morbid$emat_LIV) %in% modules_LIV_human$gene_symbol],
+	mod_tab=modules_LIV_human,
+	source_mat=morbid$emat_SF,
+	endocrines=endocrines_human
+)
+endo78_98 = annotateEndoEigenCor(endo78_98, SF_liver_morbid, "Obese_SF", "gene_symbol")
+
 
 
 # # Write table
@@ -237,6 +286,9 @@ endo78_98 = annotateEndoEigenCor(endo78_98, SF_liver_gtex, "GTEx_SF", "gene_symb
 # )
 
 
+# STARNET endocrine candidate correlation with clinical traits
+# ------------------------------------------------
+
 library(devtools)  # for installing heatmap.3
 # Load heatmap.3
 source_url("https://raw.githubusercontent.com/obigriffith/biostar-tutorials/master/Heatmaps/heatmap.3.R")
@@ -249,8 +301,15 @@ pdf(paste0("co-expression/plots/endocrine/endocrines_module_78_98_validation_hea
 # idx_78_98 = endo$clust == 78 & endo$target_clust == 98
 
 # endocrine_sel
-# cmat_78_98 = endo78_98[, c("ts_endo_cor", "HMDP_HF_cor", "HMDP_chow_cor")]
-cmat_78_98 = endo78_98[, c("ts_endo_cor", "HMDP_HF_cor", "HMDP_chow_cor", "GTEx_VAF_cor", "GTEx_SF_cor")]
+features = c("ts_endo", "HMDP_HF", "HMDP_chow", "GTEx_VAF", "GTEx_SF", "Obese_VAF", "Obese_SF")
+
+# for systematically extracting p-values
+colnames(endo78_98)[colnames(endo78_98) == "ts_endo_cor_p"] = "ts_endo_p"
+
+cmat_78_98 = data.frame(endo78_98)[, paste0(features, "_cor")]
+pmat_78_98 = data.frame(endo78_98)[, paste0(features, "_p")]
+
+# cmat_78_98 = endo78_98[, c("ts_endo_cor", "HMDP_HF_cor", "HMDP_chow_cor", "GTEx_VAF_cor", "GTEx_SF_cor", "Obese_VAF_cor", "Obese_SF_cor")]
 rownames(cmat_78_98) = endo78_98$id
 
 # colnames(cmat_78_98) = c("STARNET", "HMDP HF", "HMDP chow")
@@ -262,7 +321,8 @@ rlab = tissue_cols[as.integer(factor(endo78_98$tissue, levels=tissues))]
 rlab = as.matrix(rlab)
 colnames(rlab) = "Tissue of origin"
 
-heatmap.3(data.matrix(cmat_78_98), trace="none",
+heatmap.3(data.matrix(cmat_78_98),
+	trace="none",
 	col=colorRampPalette(rev(brewer.pal(9, "RdBu")))(100),
 	Rowv=FALSE,
 	Colv=FALSE,

@@ -23,8 +23,6 @@ source("src/permuteTest.R")
 source("src/parse.R")
 
 
-
-
 # Get ensembl gene data
 message("Loading ensembl")
 ensembl = useEnsembl(biomart="ensembl",

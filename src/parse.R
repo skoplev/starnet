@@ -319,3 +319,78 @@ getCADGenes = function(data_dir) {
 
 	return(cad_genes)
 }
+
+
+loadMorbidObesity = function() {
+	require(biomaRt)
+	require(dplyr)
+
+	# Get ensembl gene data
+	message("Loading ensembl")
+	ensembl = useEnsembl(biomart="ensembl",
+		dataset="hsapiens_gene_ensembl")
+	ensembl_symbol_map = getBM(
+		attributes=c("ensembl_gene_id", "ensembl_transcript_id", "hgnc_symbol", "gene_biotype", "entrezgene"),
+		mart=ensembl)
+
+	morbid = getGEO(filename="~/DataBases/MorbidObesity/GSE24335_family.soft.gz", GSEMatrix=TRUE)
+
+	# Make sure that platform is identical
+	gsmplatforms = lapply(GSMList(morbid),function(x) {Meta(x)$platform_id})
+	table(unlist(gsmplatforms))
+
+	platform = getGEO("GPL4372")
+
+	# gsmlist = GSMList(morbid)
+	# Table(gsmlist[[1]])
+	# Columns(gsmlist[[1]])
+	# Meta(gsmlist[[1]])
+
+	sample_annot = data.frame(
+		sample.ID=names(GSMList(morbid)),
+		tissue_name = sapply(GSMList(morbid), function(x) Meta(x)$source_name_ch1),
+		title = sapply(GSMList(morbid), function(x) Meta(x)$title)
+	)
+
+	sample_annot$MGH.ID = sapply(strsplit(as.character(sample_annot$title), "_"), function(x) x[length(x)])
+
+	table(sample_annot$tissue_name)
+	sample_annot$tissue = recode(sample_annot$tissue_name,
+		"omental adipose"="VAF",
+		"subcutaneous adipose"="SF",
+		"liver"="LIV"
+	)
+
+	table(sample_annot$tissue)
+	table(table(sample_annot$MGH.ID))
+
+	# Gene metadata
+	# ------------------------------
+	probeset = Table(GPLList(morbid)[[1]])$ID
+
+	# are annotations matched?
+	stopifnot(all(Table(platform)$ID == probeset))
+	meta_row = Table(platform)
+
+	meta_row$ensembl = ensembl_symbol_map$ensembl_gene_id[match(meta_row$EntrezGeneID, ensembl_symbol_map$entrezgene)]
+	meta_row$ensembl[is.na(meta_row$EntrezGeneID)] = NA  # ensure that NA values are not matched
+
+	meta_row$hgnc_symbol = ensembl_symbol_map$hgnc_symbol[match(meta_row$EntrezGeneID, ensembl_symbol_map$entrezgene)]
+	meta_row$hgnc_symbol[is.na(meta_row$EntrezGeneID)] = NA  # ensure that NA values are not matched
+
+	meta_row$gene_biotype = ensembl_symbol_map$gene_biotype[match(meta_row$EntrezGeneID, ensembl_symbol_map$entrezgene)]
+
+
+
+	# Get expression matrix for GEO series
+	# ---------------------------------------
+	emat = do.call('cbind',
+		lapply(GSMList(morbid), function(x) {
+			tab = Table(x)
+			mymatch = match(probeset, tab$ID_REF)
+			return(tab$VALUE[mymatch])
+		})
+	)
+
+	return(list(emat=emat, meta_row=meta_row, sample_annot=sample_annot))
+}

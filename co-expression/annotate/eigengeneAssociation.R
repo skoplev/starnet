@@ -228,3 +228,14 @@ dev.off()
 # 	xlab="fP-HDL-Chol(mmol/l)",
 # 	ylab=paste("Eigengene", j)
 # )
+
+
+i = 78
+j = 98
+scatterPlot(
+	between$bwnet$eigengenes[, i],
+	between$bwnet$eigengenes[, j],
+	# col=colors[2],
+	xlab=paste("Eigengene", i),
+	ylab=paste("Eigengene", j)
+)

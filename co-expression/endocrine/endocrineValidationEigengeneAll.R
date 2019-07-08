@@ -1,4 +1,8 @@
 # adopted from endocrineValidationHMPD.R
+# Open R session from terminal
+# $ open /Applications/R.app
+# with max heap size set above default, ie. from .bash_profile
+# $ export R_MAX_VSIZE=32000000000
 
 rm(list=ls())
 
@@ -7,6 +11,10 @@ library(WGCNA)
 library(RColorBrewer)
 library(gplots)
 library(GEOquery)
+library(stringr)
+library(plyr)
+library(biomaRt)
+
 
 setwd("~/GoogleDrive/projects/STARNET/cross-tissue")
 
@@ -97,6 +105,73 @@ morbid$emat_VAF = morbid$emat_VAF[match(rownames(morbid$emat_LIV), rownames(morb
 
 stopifnot(rownames(morbid$emat_LIV) == rownames(morbid$emat_SF))
 stopifnot(rownames(morbid$emat_LIV) == rownames(morbid$emat_VAF))
+
+# Load HMDP apoe-leiden data. Liver (microarray) and adipose (RNA-seq).
+# ----------------------------------------------
+
+# Load biomaRt database for annotating genes
+ensembl = useEnsembl(biomart="ensembl",
+	dataset="mmusculus_gene_ensembl")
+	# version=89)
+
+gene_map = getBM(
+	attributes=c("ensembl_gene_id", "mgi_symbol", "gene_biotype"),
+	mart=ensembl)
+
+
+apoe = list()
+
+# Adipose gene expression
+apoe$adipose_mat = fread("data/apoe-leiden-mice/adipose_RNAseq/gene_counts.txt")
+apoe$adipose_genes = apoe$adipose_mat[, 1:6]
+
+# Add gene symbols
+apoe$adipose_genes = cbind(apoe$adipose_genes,
+	gene_map[match(apoe$adipose_genes$Geneid, gene_map$ensembl_gene_id), c("mgi_symbol", "gene_biotype")]
+)
+
+apoe$adipose_mat = data.matrix(apoe$adipose_mat[, -1:-6])
+rownames(apoe$adipose_mat) = apoe$adipose_genes$mgi_symbol
+
+# Pseudo-log transform
+apoe$adipose_mat = log2(apoe$adipose_mat + 1)
+
+# Filter out zero variance genes
+apoe$adipose_mat = apoe$adipose_mat[apply(apoe$adipose_mat, 1, sd) > 0, ]
+
+# Sample annotation table
+samples = data.frame(
+	str_match(
+		colnames(apoe$adipose_mat),
+		"^ms([0-9]+)"),
+	stringsAsFactors=FALSE)
+colnames(samples) = c("id_str", "id")
+
+apoe$adipose_annot = fread("data/apoe-leiden-mice/adipose_RNAseq/adipose mouse IDs and labels.txt")
+colnames(apoe$adipose_annot)[colnames(apoe$adipose_annot) == "Sample #"] = "id"
+
+apoe$adipose_samples = join(samples, apoe$adipose_annot, by="id")
+
+colnames(apoe$adipose_mat) = apoe$adipose_samples$mouse_number  # for matching samples
+	
+
+# liver gene expression
+apoe$liver_female_mat = fread("data/apoe-leiden-mice/ath_liver/HMDP Female Ath Liver Expression.txt")
+apoe$liver_male_mat = fread("data/apoe-leiden-mice/ath_liver/HMDP Male Ath Liver Expression.txt")
+
+stopifnot(apoe$liver_female_mat$gene_symbol == apoe$liver_male_mat$gene_symbol)
+
+# Combine
+apoe$liver_mat = cbind(apoe$liver_female_mat, apoe$liver_male_mat[, c(-1, -2)])
+gene_symbol = apoe$liver_mat$gene_symbol
+apoe$liver_mat = data.matrix(apoe$liver_mat[, c(-1, -2)])
+rownames(apoe$liver_mat) = gene_symbol
+
+
+# Match to available adipose samples 
+apoe$liver_mat_match = apoe$liver_mat[, match(colnames(apoe$adipose_mat), colnames(apoe$liver_mat))]
+stopifnot(colnames(apoe$adipose_mat) == colnames(apoe$liver_mat_match))
+
 
 
 # Select all of FDR threshold endocrine candidates
@@ -246,6 +321,20 @@ adipose_liver_chow = endoEigenCor(
 endo_sel = annotateEndoEigenCor(endo_sel, adipose_liver_chow, "HMDP_chow", "mouse_symbol")
 
 
+
+# HMDP ApoE-Leiden
+# ------------------------------------------
+
+adipose_liver_apoe = endoEigenCor(
+	target_mat=t(apoe$liver_mat_match),
+	mod_tab=modules_LIV_mouse,
+	source_mat=t(apoe$adipose_mat),
+	endocrines=endocrines_mouse
+)
+
+endo_sel = annotateEndoEigenCor(endo_sel, adipose_liver_apoe, "HMDP_apoe", "mouse_symbol")
+
+
 # GTEx
 # ------------------------------------------
 VAF_liver_gtex = endoEigenCor(
@@ -356,15 +445,17 @@ library(ComplexHeatmap)
 library(circlize)
 
 
-pdf(paste0("co-expression/plots/endocrine/endocrines_module_78_98_validation_heatmap_v2_", endocrine_sel, ".pdf"),
+pdf(paste0("co-expression/plots/endocrine/endocrines_module_78_98_validation_heatmap_v3_", endocrine_sel, ".pdf"),
 	height=5,
-	width=7)
+	width=7.5)
 
 # endocrine_sel
-features = c("ts_endo", "HMDP_HF", "HMDP_chow", "GTEx_VAF", "GTEx_SF", "Obese_VAF", "Obese_SF")
+features = c("ts_endo", "HMDP_HF", "HMDP_chow", "GTEx_VAF", "GTEx_SF", "Obese_VAF", "Obese_SF", "HMDP_apoe")
 
 # for systematically extracting p-values
 colnames(endo_sel)[colnames(endo_sel) == "ts_endo_cor_p"] = "ts_endo_p"
+
+paste0(features, "_cor") %in% colnames(endo_sel)
 
 cmat = data.frame(endo_sel)[, paste0(features, "_cor")]
 cmat = data.matrix(cmat)

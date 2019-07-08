@@ -230,6 +230,7 @@ dev.off()
 # )
 
 
+pdf("co-expression/annotate/plots/eigenegene_98_78_assocation_scatter.pdf", height=4.3, width=4.0)
 i = 78
 j = 98
 scatterPlot(
@@ -239,3 +240,4 @@ scatterPlot(
 	xlab=paste("Eigengene", i),
 	ylab=paste("Eigengene", j)
 )
+dev.off()

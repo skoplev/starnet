@@ -127,7 +127,7 @@ fullRankSubmat = function(mat) {
 
 data_dir = "/Users/sk/DataProjects/cross-tissue"
 
-setwd("/Users/sk/Google Drive/projects/cross-tissue")
+setwd("/Users/sk/GoogleDrive/projects/STARNET/cross-tissue")
 
 
 
@@ -179,7 +179,7 @@ covar_merged = covar_merged[, !names(covar_merged) %in% c("subject", "batch"), w
 
 # Load count matrices
 # gene symbol, exp
-expr_files = list.files(emat_dir)
+expr_files = list.files(emat_dir, "*.mat")
 
 # Load all data matrices
 expr_mats = lapply(expr_files, function(file_name) {
@@ -189,6 +189,7 @@ expr_mats = lapply(expr_files, function(file_name) {
 })
 names(expr_mats) = expr_files
 
+lapply(expr_mats, dim)
 
 
 

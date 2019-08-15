@@ -142,7 +142,7 @@ colnames(olink_pmat) = sapply(strsplit(colnames(olink_pmat), "_"), function(x) x
 
 # cor.test(between$bwnet$eigengenes[, i], pheno_matched$syntax_score)
 
-
+	
 # GO enrichment of modules
 # ---------------------------------------------
 between_go_enrich = enrichmentGO(between)

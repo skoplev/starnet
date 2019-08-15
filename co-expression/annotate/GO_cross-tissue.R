@@ -1,7 +1,7 @@
 #
 rm(list=ls())
 
-setwd("~/Google Drive/projects/STARNET/cross-tissue")
+setwd("~/GoogleDrive/projects/STARNET/cross-tissue")
 
 library(GO.db)
 library(org.Hs.eg.db)
@@ -15,6 +15,10 @@ library(anRichment)
 go_pmat = read.table("co-expression/tables/mod_GO_pmat.tsv",
 	check.names=FALSE)
 
+# Test if p-value matrix is truncated for top-100
+apply(go_pmat, 1, function(p) {
+	sum(p < 0.05)
+})
 
 # Load co-expression modules
 # modules = fread("co-expression/tables/modules.csv")

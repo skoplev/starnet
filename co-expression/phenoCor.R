@@ -14,7 +14,7 @@ library(data.table)
 source_url("https://raw.githubusercontent.com/obigriffith/biostar-tutorials/master/Heatmaps/heatmap.3.R")
 
 data_dir = "/Users/sk/DataProjects/cross-tissue"  # root of data directory
-setwd("/Users/sk/Google Drive/projects/cross-tissue")
+setwd("/Users/sk/GoogleDrive/projects/STARNET/cross-tissue")
 
 source("src/base.R")
 source("src/parse/io.R")
@@ -45,6 +45,9 @@ load(file.path(data_dir, "STARNET/gene_exp_norm_reshape/expr_recast.RData"))
 
 # Get expression matrix from recasted data frame with all tissue 
 mat = expr_recast[, 3:ncol(expr_recast)]
+
+# Missing data rate
+mean(is.na(mat))
 
 
 # Count tissue composition of each module

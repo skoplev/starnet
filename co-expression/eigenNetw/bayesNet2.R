@@ -404,6 +404,16 @@ GWAS_enrich$Blood.pressure = p.adjust(module_tab$Blood.pressure_pval, method="BH
 GWAS_enrich$Triglycerides = p.adjust(module_tab$Triglycerides_pval, method="BH") < fdr
 
 gwas_bool = Reduce(rbind, GWAS_enrich)
+
+# Count number of enriched modules
+sum(apply(gwas_bool, 2, any))
+which(apply(gwas_bool, 2, any))
+sum(GWAS_enrich$CAD)
+which(GWAS_enrich$CAD)
+
+apply(gwas_bool, 1, sum)
+
+
 gwas_bool = rbind(apply(gwas_bool, 2, function(x) !any(x)), gwas_bool)  # add dummy variable for first row if empty
 
 

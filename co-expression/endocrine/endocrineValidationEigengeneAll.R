@@ -281,7 +281,10 @@ modules_LIV_mouse = data.frame(
 	gene_symbol=modules$mouse_symbol[idx],
 	clust=modules$clust[idx])
 
-endo_sel = endo[endo$clust == 78 & endo$target_clust == 98, ]  # 78 -> 98 endocrines
+# SELECTION FOR 78 -> 98 or all endcrine factors
+# ---------------
+# endo_sel = endo[endo$clust == 78 & endo$target_clust == 98, ]  # 78 -> 98 endocrines
+endo_sel = endo  # all endocrines
 
 endocrines_mouse = endo_sel$mouse_symbol
 # endocrines_mouse = endo_sel$mouse_symbol
@@ -375,6 +378,15 @@ SF_liver_morbid = endoEigenCor(
 )
 endo_sel = annotateEndoEigenCor(endo_sel, SF_liver_morbid, "Obese_SF", "gene_symbol")
 
+# Writing all validation (adipose to liver)
+# write.csv(endo_sel,
+# 	file="co-expression/tables/endo_adipose_liver_validation.csv",
+# 	row.names=FALSE)
+
+# sum(!is.na(endo_sel$HMDP_chow_p))
+# sum(endo_sel$HMDP_chow_p < 0.05, na.rm=TRUE)
+# sum(endo_sel$HMDP_HF_p < 0.05, na.rm=TRUE)
+# sum(endo_sel$HMDP_apoe_p < 0.05, na.rm=TRUE)
 
 
 # # Write table

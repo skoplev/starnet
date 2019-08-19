@@ -987,19 +987,25 @@ deg_frac_base = data.frame(
 )
 
 
+pdf("case-control/plots/case_control_deg_filtering_barplot.pdf", width=7.5, height=5.5)
+
 tis_cols = brewer.pal(9, "Set1")[c(1, 7, 4, 8, 3)]
 
 par(mfrow=c(2, 1))
 barplot(data.matrix(deg_frac_rpkm),
 	main=paste0("RPKM q90 > ", RPKM_q90_min),
+	ylab="DEG fraction",
+	las=2,
 	col=tis_cols,
 	beside=TRUE)
 
 barplot(data.matrix(deg_frac_base),
 	main=paste0("base mean > ", base_mean_min),
+	ylab="DEG fraction",
+	las=2,
 	col=tis_cols,
 	beside=TRUE)
-
+dev.off()
 
 # sum(res$padj[res$gene_biotype == "protein_coding"] < 0.1, na.rm=TRUE)
 

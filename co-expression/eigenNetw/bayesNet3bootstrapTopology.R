@@ -38,6 +38,28 @@ pheno_pval = read.table("pheno/tables/pheno_pval.csv",
 	check.names=FALSE
 )
 
+# Define CAD-associated modules. Copied from bayesNet3.R
+# ------------------------------------------
+features = c("syntax_score", "DUKE", "case_control_DEG")
+pheno_padj = matrix(
+	p.adjust(
+		data.matrix(pheno_pval[, features]),
+		method="BH"),
+	ncol=3)
+colnames(pheno_padj) = c("SYNTAX", "DUKE", "Case-Ctrl DEG")
+
+
+fdr = 0.01
+
+cad_modules_idx = apply(pheno_padj < fdr,
+	1,
+	function(x) sum(x) >= 2)
+
+cad_modules = which(cad_modules_idx)
+length(cad_modules)
+
+
+
 # Bootstrap Bayesian inference of eigengenes
 # ------------------------------------
 # Eigengenes
@@ -95,6 +117,34 @@ bn_bootstrap_adjmat = lapply(bn_bootstrap, function(bn) {
 
 boot_adjmat = Reduce("+", bn_bootstrap_adjmat) / length(bn_bootstrap_adjmat)
 boot_p = 1 - boot_adjmat
+
+
+# Are CAD modules more significantly associated than the rest of the supernetwork?
+# -----------------------------------------
+
+# Frequencies
+cad_connect = as.vector(boot_adjmat[cad_modules_idx, cad_modules_idx])
+noncad_connect = as.vector(boot_adjmat[!cad_modules_idx, !cad_modules_idx])
+
+# Pseudo log transform on counts
+# cad_connect = log10(as.vector(boot_adjmat[cad_modules_idx, cad_modules_idx]) * 1000 + 1)
+# noncad_connect = log10(as.vector(boot_adjmat[!cad_modules_idx, !cad_modules_idx]) * 1000 + 1)
+
+plot(density(cad_connect))
+plot(density(noncad_connect))
+
+mean(cad_connect)
+mean(noncad_connect)
+
+t.test(
+	cad_connect,
+	noncad_connect
+)
+
+# wilcox.test(
+# 	cad_connect,
+# 	noncad_connect
+# )
 
 
 # Assess significant supernetwork interactions

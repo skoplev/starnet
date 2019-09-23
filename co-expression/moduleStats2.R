@@ -11,7 +11,7 @@ library(compiler)
 enableJIT(3)
 
 data_dir = "/Users/sk/DataProjects/cross-tissue"  # root of data directory
-setwd("/Users/sk/Google Drive/projects/cross-tissue")
+setwd("/Users/sk/GoogleDrive/projects/STARNET/cross-tissue")
 
 countModuleTissueStat = function(modules) {
 
@@ -55,6 +55,12 @@ sing$clust = as.numeric(factor(sing$bwnet$colors))
 sing_stats = countModuleTissueStat(sing)
 comp_stats = countModuleTissueStat(complete)
 bw_stats = countModuleTissueStat(between_within)
+
+# Percentage of modules from single beta value analysis that only contains one tissue.
+mean(sing_stats$n_tissues == 1) * 100
+
+sum(bw_stats$n_tissues >= 2)
+mean(bw_stats$n_tissues >= 2) * 100
 
 mod_stats = list("Between-within"=bw_stats,
 	"Complete"=comp_stats,

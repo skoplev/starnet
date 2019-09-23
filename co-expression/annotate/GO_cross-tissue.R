@@ -307,3 +307,4 @@ dev.off()
 # plot(-log10(go_pmat[tissue_specific, i]), -log10(go_pmat[tissue_specific, j]))
 # cor.test(-log10(go_pmat[tissue_specific, i]), -log10(go_pmat[tissue_specific, j]))
 
+# go_pmat[, which(Term(colnames(go_pmat)) == "response to stimulus")]

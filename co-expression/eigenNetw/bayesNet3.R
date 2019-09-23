@@ -56,6 +56,13 @@ colnames(pheno_padj) = c("SYNTAX", "DUKE", "Case-Ctrl DEG")
 fdr = 0.01
 
 
+cad_modules_idx = apply(pheno_padj < fdr,
+	1,
+	function(x) sum(x) >= 2)
+
+cad_modules = which(cad_modules_idx)
+length(cad_modules)
+
 
 # Bootstrapped network inferrence over eigengenes
 # ----------------------------------------------------

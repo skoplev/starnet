@@ -1,4 +1,4 @@
-# rm(list=ls())
+rm(list=ls())
 
 options(java.parameters = "-Xmx8g")  # Max Java memory heap size, for rcausal
 
@@ -16,7 +16,7 @@ library(compiler)
 enableJIT(3)
 
 data_dir = "/Users/sk/DataProjects/cross-tissue"  # root of data directory
-setwd("	~/GoogleDrive/projects/STARNET/cross-tissue")
+setwd("~/GoogleDrive/projects/STARNET/cross-tissue")
 
 source("src/models/regr.R")  # regression models
 source("src/models/cor.R")
@@ -56,6 +56,8 @@ load(file.path(data_dir, emat_file), verbose=TRUE)
 emat = expr_recast[, 3:ncol(expr_recast)]
 meta_genes = expr_recast[, 1:2]
 meta_genes = as.data.frame(meta_genes)
+
+meta_genes = parseTranscriptId(meta_genes)
 
 rm(expr_recast)
 
@@ -283,6 +285,20 @@ traits = c(
 gwas_genes = list()
 gwas_genes = lapply(traits, function(trait) getGWAS(gwas, trait))
 names(gwas_genes) = traits
+
+# Count missing genes
+gwas_missing = sapply(c(list(CAD=cad_genes), gwas_genes), function(genes) {
+	n_total = length(genes)
+	n_missing = sum(!genes %in% meta_genes$gene_symbol)
+	# frac_missing = mean(!genes %in% meta_genes$gene_symbol)
+
+	return(c(n_total, n_missing))
+})
+gwas_missing = data.frame(t(gwas_missing))
+colnames(gwas_missing) = c("n_total", "n_missing")
+gwas_missing$missing_frac = gwas_missing$n_missing / gwas_missing$n_total
+gwas_missing
+
 
 gwas_tabs = lapply(gwas_genes, function(genes) hyperGeometricModuleTest(between, genes))
 

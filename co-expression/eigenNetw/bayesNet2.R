@@ -502,6 +502,23 @@ cad_enrich_CT_genes = cbind(
 write.csv(cad_enrich_CT_genes, file="co-expression/tables/CAD_enriched_CT.csv")
 
 
+
+# Count number of genes measured in transcriptome
+# ----------------------------------
+transcriptome_counts = sapply(gwas_genes, function(genes) {
+
+	n_measured = sum(genes %in% between$meta_genes$gene_symbol)
+	n_total = length(genes)
+
+	return(c(n_measured, n_total))
+})
+transcriptome_counts = t(transcriptome_counts)
+colnames(transcriptome_counts) = c("Included", "Total")
+
+# head(between$meta_genes)
+
+
+
 # Pooled GWAS results
 GWAS_enrich_comb = list()
 GWAS_enrich_comb$CAD = GWAS_enrich$CAD

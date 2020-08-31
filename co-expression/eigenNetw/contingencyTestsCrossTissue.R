@@ -40,6 +40,9 @@ counts = vennCounts(membership)
 vennDiagram(counts, circle.col=brewer.pal(9, "Set1"))
 dev.off()
 
+which(apply(pheno_padj < fdr, 1, sum) >= 2)
+# length(which(apply(pheno_padj < fdr, 1, sum) >= 2))
+
 
 # Criteria for CAD-associated modules: at least two out of three
 # ------------------------------------------------

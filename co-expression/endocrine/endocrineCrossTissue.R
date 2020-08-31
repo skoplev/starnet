@@ -13,7 +13,7 @@ source_url("https://raw.githubusercontent.com/obigriffith/biostar-tutorials/mast
 
 
 data_dir = "/Users/sk/DataProjects/cross-tissue"  # root of data directory
-setwd("/Users/sk/Google Drive/projects/STARNET/cross-tissue")
+setwd("/Users/sk/GoogleDrive/projects/STARNET/cross-tissue")
 source("src/parse.R")
 
 addAlpha = function(col, alpha=1){

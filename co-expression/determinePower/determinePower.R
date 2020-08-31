@@ -27,6 +27,8 @@ opts$n_breaks = 50  # discrete bins of connectivity distribution
 # opts$abs_cor_min = 0.2  # minimum correlation to be considered
 # cor_quant = 0.95
 
+opts$protein_coding_only = TRUE
+# opts$protein_coding_only = FALSE
 
 # Parse and check user input
 # -------------------------------------------------------------
@@ -38,7 +40,7 @@ opts$emat_file = args[1]
 
 # For running in interactive mode
 if (!exists("args")) {
-	setwd("/Users/sk/Google Drive/projects/cross-tissue/co-expression/determinePower")
+	setwd("/Users/sk/GoogleDrive/projects/STARNET/cross-tissue/co-expression/determinePower")
 	# setwd("/sc/orga/projects/STARNET/koples01/cross-tissue/co-expression/determinePower")
 
 	data_dir = "/Users/sk/DataProjects/cross-tissue"
@@ -58,6 +60,25 @@ if (exists("expr_recast")) {
 	row_meta = expr_recast[, 1:2]
 	row_meta = as.data.frame(row_meta)
 }
+
+
+if (opts$protein_coding_only) {
+	# Load parseEnsemblBiotype() and parseTranscriptId() functions
+	source("../../src/parse.R")  
+
+	# Annotate gene metadata with biotype
+	row_meta = parseTranscriptId(row_meta)
+
+	table(row_meta$gene_biotype)
+
+	# Filter gene expression data
+	idx = row_meta$gene_biotype == "protein_coding"
+	# table(row_meta$tissue[idx])
+
+	row_meta = row_meta[idx, ]
+	mat = mat[idx, ]
+}
+
 
 # Check input
 if (!exists("mat")) {
@@ -139,7 +160,7 @@ for (i in 1:length(unique(row_meta$tissue))) {
 		gc()
 		# message("\tcalculating connectivity")
 		# Calculate connectivity for nodes in both tissues
-		k = apply(cmat_power, 1, sum) - 1  # subtracting diagonal
+		k = apply(cmat_power, 1, sum, na.rm=TRUE) - 1  # subtracting diagonal
 		gc()
 
 		# message("\tfitting scale-free connectivity model")
@@ -199,8 +220,8 @@ for (i in 1:ncol(paired_tissue)) {
 		gc()
 		# message("\tcalculating connectivity")
 		# Calculate connectivity for nodes in both tissues
-		k1 = apply(cmat_power, 1, sum)
-		k2 = apply(cmat_power, 2, sum)
+		k1 = apply(cmat_power, 1, sum, na.rm=TRUE)
+		k2 = apply(cmat_power, 2, sum, na.rm=TRUE)
 
 		# message("\tfitting scale-free connectivity model")
 		fit = scaleFreeFitIndex(c(k1, k2), nBreaks=opts$n_breaks, removeFirst=TRUE)
@@ -220,5 +241,9 @@ names(con_eval_pairs) = apply(paired_tissue, 2, function(fac) {
 
 
 dir.create("output")
-save(opts, con_eval, con_eval_pairs, file="output/con_eval.RData")
+if (!opts$protein_coding_only) {
+	save(opts, con_eval, con_eval_pairs, file="output/con_eval.RData")
+} else {
+	save(opts, con_eval, con_eval_pairs, file="output/con_eval_protCoding.RData")
+}
 # save(con_eval_pairs, file="output/thresh_eval_pairs.RData")

@@ -104,6 +104,103 @@ loadNormData = function(data_dir, min_sd=0, exclude_files) {
 	return(expr_recast)
 }
 
+
+loadGTEx = function() {
+	# Adopted from endocrineValidationGTEx.R
+	# Load GTEx data for tissues matching those sampled in STARNET
+	gtex = list()
+	gtex$mat = fread("~/DataBases/GTEx/RNA-seq/GTEx_Analysis_2016-01-15_v7_RNASeQCv1.1.8_gene_tpm.gct")
+
+	gtex$annot = fread("~/DataBases/GTEx/RNA-seq/GTEx_v7_Annotations_SampleAttributesDS.txt")
+
+	# Match annotation table to column names
+	# note that first two columns of mat are dummy IDs
+	gtex$annot = gtex$annot[match(colnames(gtex$mat), gtex$annot$SAMPID), ]
+
+	gtex$annot$gtex.ID = sapply(strsplit(gtex$annot$SAMPID, "-"), function(x) paste(x[1], x[2], sep="-"))
+
+
+	table(gtex$annot$SMTSD)
+
+	# Map to STARNET tissues
+	gtex$annot$tissue[gtex$annot$SMTSD == "Adipose - Subcutaneous"] = "SF"
+	gtex$annot$tissue[gtex$annot$SMTSD == "Adipose - Visceral (Omentum)"] = "VAF"
+	gtex$annot$tissue[gtex$annot$SMTSD == "Liver"] = "LIV"
+	gtex$annot$tissue[gtex$annot$SMTSD == "Artery - Aorta"] = "AOR"
+	gtex$annot$tissue[gtex$annot$SMTSD == "Muscle - Skeletal"] = "SKLM"
+	gtex$annot$tissue[gtex$annot$SMTSD == "Whole Blood"] = "BLOOD"
+
+
+	#...
+
+	# tissues = c("SF", "VAF", "LIV")
+	tissues = c("SF", "VAF", "LIV", "SKLM", "BLOOD", "AOR")
+
+	gtex$annot$tissue %in% tissues
+	sum(gtex$annot$tissue %in% tissues)
+
+
+
+	# GTEx IDs with at 
+	avail = gtex$annot$tissue %in% tissues
+	# gtex_ids = names(which(
+	# 	table(gtex$annot$gtex.ID[avail]) > 1))
+
+	gtex_ids = gtex$annot$gtex.ID[avail]
+
+	length(gtex_ids)
+
+
+	# Make long table tissue mRNA x patient ID
+	mats = lapply(tissues, function(tis) {
+		message(tis)
+		# Tissue samples
+		idx = which(gtex$annot$tissue == tis)
+
+		# Match column idx to patients
+		idx = idx[match(gtex_ids, gtex$annot$gtex.ID[idx])]
+
+		gtex$annot$tissue[idx]
+
+		gtex$annot$gtex.ID[idx] == gtex_ids
+
+		meta_row = gtex$mat[, 1:2]
+		meta_row$tissue = tis
+
+		mat = data.matrix(gtex$mat)[, idx]
+		colnames(mat) = gtex_ids
+
+		stopifnot(all(na.omit(colnames(mat) == gtex_ids)))
+
+		tab = cbind(meta_row, data.table(mat))
+
+		gc()
+		return(tab)
+	})
+
+	expr_mat = rbindlist(mats)
+
+	meta_row = expr_mat[, 1:3]
+	meta_row$ensembl_base = sapply(strsplit(meta_row$Name, "[.]"), function(x) x[1])
+	meta_row$tissue_transcript_id = paste(meta_row$tissue, meta_row$ensembl_base, sep="_")
+	meta_row$gene_biotype = parseEnsemblBiotype(meta_row$ensembl)
+	meta_row$tissue_gene_biotype = paste(meta_row$tissue, meta_row$gene_biotype, sep="_")
+
+	expr_mat = expr_mat[, -1:-3]
+	expr_mat = data.matrix(expr_mat)
+	rownames(expr_mat) = paste(meta_row$tissue, meta_row$ensembl_base, sep="_")
+
+	# Remove zero variance genes
+	# idx = apply(expr_mat, 1, sd, na.rm=TRUE) > 0.001
+	idx = apply(expr_mat, 1, sd, na.rm=TRUE) > 0
+	expr_mat = expr_mat[idx, ]
+	meta_row = meta_row[idx, ]
+
+	gc()
+
+	return(list(mat=expr_mat, meta_row=meta_row))
+}
+
 # Loads ensembl biotypes by loading Ensembl database
 parseEnsemblBiotype = function(ensembl) {
 	require(biomaRt)

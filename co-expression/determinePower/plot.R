@@ -36,7 +36,9 @@ getOptimalBeta = function(con_eval, powers, beta_min=0.85, beta_frac=0.95, selBe
 # Load outout
 # load('~/DataProjects/cross-tissue/STARNET/determine_power/con_eval2.RData')
 # load('~/DataProjects/cross-tissue/STARNET/determine_power/con_eval.RData')
-load('~/DataProjects/cross-tissue/STARNET/determine_power/con_eval_no_impute.RData')
+# load('~/DataProjects/cross-tissue/STARNET/determine_power/con_eval_no_impute.RData')  # main
+
+load('~/GoogleDrive/projects/STARNET/cross-tissue/co-expression/determinePower/output/con_eval_protCoding.RData')
 
 
 # Load tissue specification. Not strictly necesary
@@ -75,7 +77,8 @@ tissue_pairs = lapply(
 
 
 # pdf("plots/beta_series.pdf", height=9, width=5)
-pdf("plots/beta_series_no_impute.pdf", height=9, width=5)
+# pdf("plots/beta_series_no_impute.pdf", height=9, width=5)
+pdf("plots/beta_series_protein_coding_only.pdf", height=9, width=5)
 par(mfrow=c(4, 2))
 for (i in 1:length(con_eval)) {
 	tissue = names(con_eval)[i]

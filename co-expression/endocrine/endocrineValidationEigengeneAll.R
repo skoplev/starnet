@@ -48,6 +48,9 @@ hmdp = lapply(list.files(file.path(data_dir, "HMDP/chow_HF")),
 })
 names(hmdp) = list.files(file.path(data_dir, "HMDP/chow_HF"))
 
+dim(hmdp$Adipose_chow_male)
+lapply(hmdp, dim)
+# table(rownames(hmdp$Adipose_chow_male))
 
 # Load GTEx
 gtex = list()

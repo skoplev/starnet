@@ -10,7 +10,7 @@ source_url("https://raw.githubusercontent.com/obigriffith/biostar-tutorials/mast
 
 data_dir = "/Users/sk/DataProjects/cross-tissue"
 
-setwd("~/Google Drive/projects/STARNET/cross-tissue")
+setwd("~/GoogleDrive/projects/STARNET/cross-tissue")
 source("src/base.R")
 
 # Load data

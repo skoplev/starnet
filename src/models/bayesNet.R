@@ -376,3 +376,104 @@ learnBayesNets.4 = function(clust, meta_genes, emat, ref_netw, eqtl_netw, max_si
 
 	return(bayes_nets)
 }
+
+
+
+# no priors, Tetrad on selection of co-expression modules
+learnBayesNets.5 = function(clust, meta_genes, emat, max_size=3000) {
+	# require(bnlearn)
+
+	if (nrow(meta_genes) != nrow(emat)) {
+		stop("Expression matrix and transcript meta data mismatch.")
+	}
+
+	if (length(clust) != nrow(meta_genes)) {
+		stop("Clust vector length differ from meta_genes.")
+	}
+
+	bayes_nets = lapply(na.omit(unique(clust)), function(k) {
+		row_idx = which(clust == k)
+
+		# Check module size
+		if (length(row_idx) > max_size) {
+			return(NA)
+		}
+
+		if (length(row_idx) < 10) {
+			return(NA)
+		}
+
+		# Tissue_transcipt IDs for module
+		node_ids = paste(meta_genes$tissue[row_idx], meta_genes$transcript_id[row_idx], sep="_")
+		# node_ids = gsub("-", ".", node_ids)  # replaces '-' with '.' for compatability with bnlearn blacklist
+
+		# Print first 10 transcript IDs
+		message("Module: ", paste(node_ids[1:2], collapse=", "), "...(n=", length(node_ids), ")")
+
+
+		# Get matrix
+		submat = t(emat[row_idx,])
+
+		# Exclude samples that have no observations
+		col_idx = apply(submat, 1, function(col) {
+			return(!all(is.na(col)))
+		})
+
+		submat = submat[col_idx, ]
+
+		# Effective sample size
+		message("Sample size: ", sum(col_idx))
+
+
+		colnames(submat) = node_ids
+
+		# Standardize and impute missing to mean
+		submat = scale(submat)
+		submat[is.na(submat)] = 0.0
+
+		# bn = NULL  # default
+		# bn = hc(data.frame(submat))  # greedy hill climbing, BIC score
+
+		# bn = hc(data.frame(submat), blacklist=exclude_edges)  # greedy hill climbing, BIC score
+
+		# tetradrunner.getAlgorithmDescription(algoId='fges')
+		# tetradrunner.getAlgorithmParameters(algoId='fges', scoreId='fisher-z')
+		# tetradrunner.getAlgorithmParameters(algoId='fges', scoreId='sem-bic')
+
+		# convert data frame to list of vectors (from, to) for the prior specification
+		# prior = priorKnowledge(forbiddirect=unlist(apply(exclude_edges, 1, list), recursive=FALSE))
+
+		# message("Constructing priors...")
+		# # Silent
+		# invisible(capture.output(
+		# 	prior <- priorKnowledge(forbiddirect=unlist(apply(exclude_edges, 1, list), recursive=FALSE))
+		# ))
+
+
+
+		message("Running FGES search...")
+		# Compute FGES search
+		bn = tetradrunner(
+			algoId='fges',
+			df=submat,
+			# scoreId='fisher-z',
+			scoreId='sem-bic',
+			dataType='continuous',
+			# alpha=0.05,
+			faithfulnessAssumed=TRUE,
+			# maxDegree=-1,
+			maxDegree=100,
+			# numberResampling = 10,
+			# resamplingEnsemble = 2,
+			verbose=FALSE
+			# priorKnowledge=prior
+		)
+
+		gc()
+		return(bn)
+	})
+	names(bayes_nets) = na.omit(unique(clust))
+
+	return(bayes_nets)
+}
+

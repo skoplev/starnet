@@ -439,6 +439,10 @@ names(gwas_genes) = traits
 
 gwas_genes = c(list(CAD=getCADGenes(data_dir)), gwas_genes)
 
+
+write(unique(unlist(gwas_genes)), file="co-expression/cad_genes/gwas_all.txt")
+
+
 # check trait names manually
 data.frame(n1=names(GWAS_enrich), n2=names(gwas_genes))
 

@@ -27,10 +27,13 @@ data_dir = "/Users/sk/DataProjects/cross-tissue"  # root of data directory
 # Load gene expression data
 # ---------------------------------------------
 
+# hmdp_dir = file.path(data_dir, "HMDP/chow_HF")
+hmdp_dir = "~/GoogleDrive/projects/STARNET/external_data/HMDP/chow_HF"
+
 # Load and parse HMDP gene expression data
-hmdp = lapply(list.files(file.path(data_dir, "HMDP/chow_HF")),
+hmdp = lapply(list.files(hmdp_dir),
 	function(file_name) {
-	file_path = file.path(data_dir, "HMDP/chow_HF", file_name)
+	file_path = file.path(hmdp_dir, file_name)
 	d = fread(file_path)
 	d = data.frame(d)
 
@@ -46,7 +49,7 @@ hmdp = lapply(list.files(file.path(data_dir, "HMDP/chow_HF")),
 
 	return(d)
 })
-names(hmdp) = list.files(file.path(data_dir, "HMDP/chow_HF"))
+names(hmdp) = list.files(hmdp_dir)
 
 dim(hmdp$Adipose_chow_male)
 lapply(hmdp, dim)
@@ -286,8 +289,8 @@ modules_LIV_mouse = data.frame(
 
 # SELECTION FOR 78 -> 98 or all endcrine factors
 # ---------------
-# endo_sel = endo[endo$clust == 78 & endo$target_clust == 98, ]  # 78 -> 98 endocrines
-endo_sel = endo  # all endocrines
+endo_sel = endo[endo$clust == 78 & endo$target_clust == 98, ]  # 78 -> 98 endocrines
+# endo_sel = endo  # all endocrines
 
 endocrines_mouse = endo_sel$mouse_symbol
 # endocrines_mouse = endo_sel$mouse_symbol
@@ -448,6 +451,8 @@ starnet_pheno = corAndPvalue(
 	t(starnet$mat[idx, ]),
 	data.frame(starnet$pheno_match, check.names=FALSE)[, features]
 )
+
+saveRDS(starnet_pheno, file=paste0("co-expression/plots/endocrine/endocrines_module_78_98_validation_heatmap_v3_", endocrine_sel, ".rds"))
 
 
 # Visualization

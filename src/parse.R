@@ -105,13 +105,12 @@ loadNormData = function(data_dir, min_sd=0, exclude_files) {
 }
 
 
-loadGTEx = function() {
+loadGTEx = function(dir="~/DataBases/GTEx/RNA-seq") {
 	# Adopted from endocrineValidationGTEx.R
 	# Load GTEx data for tissues matching those sampled in STARNET
 	gtex = list()
-	gtex$mat = fread("~/DataBases/GTEx/RNA-seq/GTEx_Analysis_2016-01-15_v7_RNASeQCv1.1.8_gene_tpm.gct")
-
-	gtex$annot = fread("~/DataBases/GTEx/RNA-seq/GTEx_v7_Annotations_SampleAttributesDS.txt")
+	gtex$mat = fread(file.path(dir, "GTEx_Analysis_2016-01-15_v7_RNASeQCv1.1.8_gene_tpm.gct"))
+	gtex$annot = fread(file.path(dir, "GTEx_v7_Annotations_SampleAttributesDS.txt"))
 
 	# Match annotation table to column names
 	# note that first two columns of mat are dummy IDs
@@ -183,7 +182,15 @@ loadGTEx = function() {
 	meta_row = expr_mat[, 1:3]
 	meta_row$ensembl_base = sapply(strsplit(meta_row$Name, "[.]"), function(x) x[1])
 	meta_row$tissue_transcript_id = paste(meta_row$tissue, meta_row$ensembl_base, sep="_")
-	meta_row$gene_biotype = parseEnsemblBiotype(meta_row$ensembl)
+
+	meta_row$gene_biotype = tryCatch({
+		parseEnsemblBiotype(meta_row$ensembl)
+	}, error=function(e) {
+		warning(e)
+		return(NA)
+	})
+
+
 	meta_row$tissue_gene_biotype = paste(meta_row$tissue, meta_row$gene_biotype, sep="_")
 
 	expr_mat = expr_mat[, -1:-3]
@@ -201,6 +208,7 @@ loadGTEx = function() {
 	return(list(mat=expr_mat, meta_row=meta_row))
 }
 
+
 # Loads ensembl biotypes by loading Ensembl database
 parseEnsemblBiotype = function(ensembl) {
 	require(biomaRt)
@@ -209,19 +217,45 @@ parseEnsemblBiotype = function(ensembl) {
 	# Get ensembl gene data
 	message("Loading ensembl")
 	
-	ensembl = useEnsembl(biomart="ensembl",
-		dataset="hsapiens_gene_ensembl")
-	ensembl_symbol_map = getBM(
-		attributes=c("ensembl_gene_id", "ensembl_transcript_id", "hgnc_symbol", "gene_biotype"),
-		mart=ensembl)
+	# Try to connect to ensembl
+	ensembl = tryCatch({
+		useEnsembl(biomart="ensembl",
+			dataset="hsapiens_gene_ensembl"
+			# host="useast.ensembl.org"
+			# host="http://dec2017.archive.ensembl.org/"
+		)
+	}, error=function(e) {
+		warning(e)
+		return(NULL)
+	})
 
-	# Map ensembl IDs to biotype
-	gene_biotype = ensembl_symbol_map$gene_biotype[
-		match(ensembl_base, ensembl_symbol_map$ensembl_gene_id)
-	]
+	if (!is.null(ensembl)) {
+		ensembl_symbol_map = getBM(
+			attributes=c("ensembl_gene_id", "ensembl_transcript_id", "hgnc_symbol", "gene_biotype"),
+			mart=ensembl)
 
-	return(gene_biotype)
+		# Map ensembl IDs to biotype
+		gene_biotype = ensembl_symbol_map$gene_biotype[
+			match(ensembl_base, ensembl_symbol_map$ensembl_gene_id)
+		]
+
+		return(gene_biotype)
+	} else {
+		return(NA)
+	}
+
 }
+
+# Manual test function
+testParseEnsemblBiotype = function() {
+	a = tryCatch({
+		parseEnsemblBiotype(c("ENSG1101001", "ENSG10101"))
+	}, error=function(e) {
+		warning(e)
+		return(NA)
+	})
+}
+
 
 # Parses transcript ids from meta_genes table.
 # Changes ensembl and gene_symbol column if input data frame and returns new data frame.
@@ -253,7 +287,13 @@ parseTranscriptId = function(meta_genes) {
 
 	meta_genes$tissue_transcript_id = paste(meta_genes$tissue, meta_genes$transcript_id, sep="_")
 
-	meta_genes$gene_biotype = parseEnsemblBiotype(meta_genes$ensembl)
+	meta_genes$gene_biotype = tryCatch({
+		parseEnsemblBiotype(meta_genes$ensembl)
+	}, error=function(e) {
+		warning(e)
+		return(NA)
+	})
+
 
 	return(meta_genes)
 }

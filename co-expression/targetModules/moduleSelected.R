@@ -23,7 +23,7 @@ library(rcausal)
 
 
 data_dir = "/Users/sk/DataProjects/cross-tissue"  # root of data directory
-setwd("/Users/sk/Google Drive/projects/cross-tissue")
+setwd("/Users/sk/GoogleDrive/projects/STARNET/cross-tissue")
 
 source("src/models/bayesNet.R")
 

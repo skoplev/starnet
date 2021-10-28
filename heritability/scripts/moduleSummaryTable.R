@@ -34,6 +34,9 @@ tab$eqtl_perc = (tab$eqtl_genes / tab$genes) * 100
 tab$type[mod_tab$purity < 0.95] = "cross-tissue"
 tab$type[mod_tab$purity >= 0.95] = "tissue-specific"
 
+
+
+
 write.csv(tab, "heritability/eQTL/module_eqtl.csv",
 	row.names=FALSE)
 

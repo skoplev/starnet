@@ -94,6 +94,22 @@ for (feat in metabolic_feat) {
 }
 
 
+# Load MDS genetic components from Ke Hao
+genotype_mds = fread("case-control/data/genotype_MDS_hao/PCs.plink.mds.csv")
+genotype_mds =genotype_mds[, -1]
+colnames(genotype_mds)[1] = "starnet.ID"
+colnames(genotype_mds)[2:5] = paste0("MDS_", colnames(genotype_mds)[2:5])
+
+# Add to pheno table
+pheno = merge(pheno, genotype_mds, all.x=TRUE)
+
+# Impute missing MDS to median values
+for (feat in paste0("MDS_C", 1:4)) {
+	pheno[[feat]][is.na(pheno[[feat]])] = median(pheno[[feat]], na.rm=TRUE)
+}
+
+# sum(is.na(pheno$MDS_C1))
+
 # Load RNA-seq gene counts
 # -----------------------------------------------
 file_paths = file.path("case-control/data/feature_counts",
@@ -389,6 +405,19 @@ deseq_drug_pheno = lapply(count_mats, function(mat) {
 	)
 })
 
+# drug + pheno + genotypeMDS
+mds = paste0("MDS_C", 1:4)
+deseq_drug_pheno_mds = lapply(count_mats, function(mat) {
+	fitDiffModel(mat, pheno,
+		formula=as.formula(paste("~",
+			paste(c(renamePheno(metabolic_feat), treatment_feat_sel, mds), collapse="+"),
+			"+ Sex + Age + CAD.status"))
+	)
+})
+
+# Save DESeq results
+# save(deseq, deseq_drug, deseq_pheno, treatment_feat_sel, deseq_drug_pheno_mds, file="case-control/deseq_results.RData")
+
 
 # Fit individual feature adjustments for single variable comparison signatures.
 # not included in main run (DE2.RData file).
@@ -405,7 +434,7 @@ deseq_treat_single = lapply(renamePheno(treatment_feat_sel), function(feat) {
 	})
 })
 names(deseq_treat_single) = treatment_feat_sel
-save(deseq_treat_single, file="~/DataProjects/STARNET/DEG/deseq_treat_single.RData")
+# save(deseq_treat_single, file="~/DataProjects/STARNET/DEG/deseq_treat_single.RData")
 
 deseq_metabolic_single = lapply(renamePheno(metabolic_feat), function(feat) {
 	# Fit model per tissue
@@ -507,12 +536,13 @@ plotCmpDE = function(deg1, deg2, fdr=0.01, fc_lim=log2(1.3), prim_col="black", .
 
 tissues = names(deseq)
 
-pdf("case-control/plots/treatment_metabolic_adjustment.pdf", width=12, height=8)
+# pdf("case-control/plots/treatment_metabolic_adjustment.pdf", width=12, height=8)
+pdf("case-control/plots/treatment_metabolic_adjustment_v2.pdf", width=12, height=11)
 tis_cols = brewer.pal(9, "Set1")[c(1, 7, 4, 8, 3)]
 names(tis_cols) = tissues
 tis_cols = as.list(tis_cols)
 
-par(mfrow=c(3, length(tissues)))
+par(mfrow=c(4, length(tissues)))
 
 for(t in tissues) {
 	plotCmpDE(deseq[[t]]$deg, deseq_pheno[[t]]$deg,
@@ -537,6 +567,15 @@ for(t in tissues) {
 		prim_col=tis_cols[[t]],
 		main=t)
 }
+
+for(t in tissues) {
+	plotCmpDE(deseq[[t]]$deg, deseq_drug_pheno_mds[[t]]$deg,
+		xlab="-log10 p (BH, age+gender adj.)",
+		ylab="-log10 p (+metabolic+treatment+genotype adj.)",
+		prim_col=tis_cols[[t]],
+		main=t)
+}
+
 dev.off()
 
 
@@ -695,7 +734,8 @@ write.csv(res$hgnc_symbol[which(res$padj < 0.01 & abs(res$log2FoldChange) > 1 & 
 # pdf("case-control/plots/case_control_volcano.pdf", width=4.5)
 # pdf("case-control/plots/case_control_volcano.pdf", width=8, height=12)
 # pdf("case-control/plots/case_control_volcano2.pdf", width=8, height=6)
-pdf("case-control/plots/case_control_volcano3.pdf", width=7.5, height=5.5)
+# pdf("case-control/plots/case_control_volcano3.pdf", width=7.5, height=5.5)
+pdf("case-control/plots/case_control_volcano4.pdf", width=7.5, height=5.5)
 # pdf("case-control/plots/case_control_volcano3_RPKMq90-05.pdf", width=7.5, height=5.5)
 par(mfrow=c(2, 3))
 fdr = 0.01
@@ -703,8 +743,8 @@ fc_lim = log2(1.3)  # +- 30%, same as signature definition
 
 
 # colors = c(brewer.pal(8, "Set1"), brewer.pal(8, "Dark2"))
-colors = c("black", brewer.pal(8, "Set1"), brewer.pal(8, "Dark2"))
-colors = c("grey", brewer.pal(8, "Set1"), brewer.pal(8, "Dark2"))
+# colors = c("black", brewer.pal(8, "Set1"), brewer.pal(8, "Dark2"))
+colors = c(brewer.pal(8, "Set1")[2:1], brewer.pal(8, "Dark2"))
 # colors = c("grey", "black")
 
 # biotypes = names(sort(table(deseq[[1]]$deg$gene_biotype), decreasing=TRUE)[1:14])
@@ -755,7 +795,8 @@ for (i in 1:length(deseq)) {
 
 	plot(deg$log2FoldChange[idx], -log10(deg$padj)[idx],
 		pch=16,
-		cex=0.4,
+		# cex=0.4,
+		cex=0.2,
 		main=tissue,
 		col=col_pts,
 		ylim=c(0, -log10(min_adj_p)),

@@ -24,7 +24,8 @@ heri[["Module ID"]] = as.integer(heri[["Module ID"]])
 heri$CT = heri[["Module ID"]] %in% which(mod_tab$purity < 0.95)
 
 
-n_key_drivers = fread("co-expression/annotate/grn_vamsi_eqtl/kd_per_module.csv")
+# n_key_drivers = fread("co-expression/annotate/grn_vamsi_eqtl/kd_per_module.csv")
+n_key_drivers = fread("co-expression/annotate/grn_vamsi_eqtl/kd_per_module_directed.csv")
 colnames(n_key_drivers)[1] = "Module ID"
 
 # Heritability per number of key drivers
@@ -187,7 +188,8 @@ boxplotTest = function(values, colors, ...) {
 
 
 # pdf("heritability/plots/heritability_cross_tissue.pdf", width=5.5, height=2.5)
-pdf("heritability/plots/heritability_cross_tissue_v2.pdf", width=7.0, height=2.5)
+# pdf("heritability/plots/heritability_cross_tissue_v2.pdf", width=7.0, height=2.5)
+pdf("heritability/plots/heritability_cross_tissue_v3.pdf", width=7.0, height=2.5)  # directed KDA, for # key drivers
 
 par(mfrow=c(1, 5))
 
@@ -286,7 +288,8 @@ densPlot = function(x, y, cex_legend=1.0, ...) {
 		fill=c(colors, "white"))
 }
 
-pdf("heritability/plots/n_kd_density.pdf", height=2.9, width=4)
+# pdf("heritability/plots/n_kd_density.pdf", height=2.9, width=4)
+pdf("heritability/plots/n_kd_density_v2.pdf", height=2.9, width=4)  # directed
 x = heri_kd$n_key_drivers[heri_kd$CT]
 y = heri_kd$n_key_drivers[!heri_kd$CT]
 densPlot(

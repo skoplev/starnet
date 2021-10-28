@@ -96,6 +96,9 @@ write.table(kda_mod_tab,
 	quote=FALSE
 )
 
+
+# bayes_dir = "co-expression/annotate/bayesNet/rerun"
+
 # Weighted key driver analysis (wKDA) of Bayesian networks within each cross-tissue module
 # kda_label = paste0(gene, "_key_driver")
 kda_label = "modules"
@@ -104,7 +107,12 @@ job.kda$netfile = file.path(bayes_dir, "all.tsv")
 job.kda$modfile = file.path(bayes_dir, "nodes.tsv")
 job.kda$label = kda_label
 job.kda$folder = bayes_dir
-job.kda$nperm = 20
+# job.kda$nperm = 20
+
+job.kda$nperm = 2000
+job.kda$direction = -1  # 'downstream'
+job.kda$depth = 2
+
 
 job.kda = kda.configure(job.kda)
 job.kda = kda.start(job.kda)

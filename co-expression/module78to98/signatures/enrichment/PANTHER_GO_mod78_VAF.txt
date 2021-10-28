@@ -1,0 +1,43 @@
+
+
+
+
+
+Analysis Type:	PANTHER Overrepresentation Test (Released 20171205)
+Annotation Version and Release Date:	GO Ontology database  Released 2018-04-04
+Analyzed List:	upload_1 (Homo sapiens)
+Reference List:	Homo sapiens (all genes in database)
+Test Type:	FISHER
+GO biological process complete	Homo sapiens - REFLIST (21042)	upload_1 (179)	upload_1 (expected)	upload_1 (over/under)	upload_1 (fold Enrichment)	upload_1 (raw P-value)	upload_1 (FDR)
+fatty acid metabolic process (GO:0006631)	320	18	2.72	+	6.61	6.25E-10	9.75E-06
+organic acid metabolic process (GO:0006082)	1015	29	8.63	+	3.36	1.46E-08	1.14E-04
+carboxylic acid metabolic process (GO:0019752)	903	27	7.68	+	3.51	1.98E-08	1.03E-04
+monocarboxylic acid metabolic process (GO:0032787)	504	20	4.29	+	4.66	2.03E-08	7.93E-05
+oxoacid metabolic process (GO:0043436)	998	28	8.49	+	3.30	3.89E-08	1.21E-04
+small molecule biosynthetic process (GO:0044283)	597	21	5.08	+	4.14	6.43E-08	1.67E-04
+lipid biosynthetic process (GO:0008610)	602	21	5.12	+	4.10	7.37E-08	1.64E-04
+small molecule metabolic process (GO:0044281)	1855	39	15.78	+	2.47	1.79E-07	3.50E-04
+adult behavior (GO:0030534)	147	10	1.25	+	8.00	9.11E-07	1.58E-03
+triglyceride biosynthetic process (GO:0019432)	19	5	.16	+	30.94	1.51E-06	2.35E-03
+fatty acid derivative metabolic process (GO:1901568)	161	10	1.37	+	7.30	1.98E-06	2.81E-03
+acylglycerol biosynthetic process (GO:0046463)	21	5	.18	+	27.99	2.30E-06	2.99E-03
+neutral lipid biosynthetic process (GO:0046460)	21	5	.18	+	27.99	2.30E-06	2.76E-03
+lipid metabolic process (GO:0006629)	1253	28	10.66	+	2.63	3.36E-06	3.75E-03
+drug metabolic process (GO:0017144)	670	19	5.70	+	3.33	6.19E-06	6.43E-03
+long-chain fatty acid metabolic process (GO:0001676)	112	8	.95	+	8.40	8.24E-06	8.04E-03
+eating behavior (GO:0042755)	29	5	.25	+	20.27	9.21E-06	8.45E-03
+fatty acid biosynthetic process (GO:0006633)	117	8	1.00	+	8.04	1.11E-05	9.65E-03
+fatty acid derivative biosynthetic process (GO:1901570)	87	7	.74	+	9.46	1.49E-05	1.22E-02
+steroid metabolic process (GO:0008202)	255	11	2.17	+	5.07	1.69E-05	1.32E-02
+monocarboxylic acid biosynthetic process (GO:0072330)	214	10	1.82	+	5.49	2.14E-05	1.59E-02
+steroid biosynthetic process (GO:0006694)	130	8	1.11	+	7.23	2.29E-05	1.62E-02
+organic hydroxy compound biosynthetic process (GO:1901617)	171	9	1.45	+	6.19	2.29E-05	1.55E-02
+carboxylic acid biosynthetic process (GO:0046394)	332	12	2.82	+	4.25	3.75E-05	2.44E-02
+fatty-acyl-CoA metabolic process (GO:0035337)	40	5	.34	+	14.69	3.75E-05	2.34E-02
+organic acid biosynthetic process (GO:0016053)	333	12	2.83	+	4.24	3.86E-05	2.31E-02
+lipid catabolic process (GO:0016042)	289	11	2.46	+	4.47	5.08E-05	2.93E-02
+cellular lipid metabolic process (GO:0044255)	1003	22	8.53	+	2.58	5.49E-05	3.06E-02
+locomotory behavior (GO:0007626)	193	9	1.64	+	5.48	5.65E-05	3.04E-02
+long-chain fatty-acyl-CoA metabolic process (GO:0035336)	25	4	.21	+	18.81	9.86E-05	5.13E-02
+behavior (GO:0007610)	554	15	4.71	+	3.18	1.01E-04	5.09E-02
+adult locomotory behavior (GO:0008344)	82	6	.70	+	8.60	1.01E-04	4.94E-02

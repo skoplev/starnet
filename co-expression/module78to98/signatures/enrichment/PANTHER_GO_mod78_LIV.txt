@@ -1,0 +1,59 @@
+
+
+
+
+
+Analysis Type:	PANTHER Overrepresentation Test (Released 20171205)
+Annotation Version and Release Date:	GO Ontology database  Released 2018-04-04
+Analyzed List:	upload_1 (Homo sapiens)
+Reference List:	Homo sapiens (all genes in database)
+Test Type:	FISHER
+GO biological process complete	Homo sapiens - REFLIST (21042)	upload_1 (479)	upload_1 (expected)	upload_1 (over/under)	upload_1 (fold Enrichment)	upload_1 (raw P-value)	upload_1 (FDR)
+nucleic acid metabolic process (GO:0090304)	4034	43	91.83	-	.47	1.31E-09	2.05E-05
+RNA metabolic process (GO:0016070)	3514	35	79.99	-	.44	2.45E-09	1.91E-05
+regulation of gene expression (GO:0010468)	4746	57	108.04	-	.53	4.37E-09	2.27E-05
+organic acid metabolic process (GO:0006082)	1015	55	23.11	+	2.38	7.35E-09	2.86E-05
+small molecule metabolic process (GO:0044281)	1855	82	42.23	+	1.94	1.52E-08	4.75E-05
+oxidation-reduction process (GO:0055114)	958	52	21.81	+	2.38	1.93E-08	5.02E-05
+regulation of RNA metabolic process (GO:0051252)	4024	46	91.60	-	.50	2.26E-08	5.04E-05
+gene expression (GO:0010467)	3841	43	87.44	-	.49	2.52E-08	4.91E-05
+regulation of RNA biosynthetic process (GO:2001141)	3810	43	86.73	-	.50	3.33E-08	5.78E-05
+oxoacid metabolic process (GO:0043436)	998	53	22.72	+	2.33	3.49E-08	5.44E-05
+regulation of nucleic acid-templated transcription (GO:1903506)	3802	43	86.55	-	.50	4.46E-08	6.32E-05
+regulation of transcription, DNA-templated (GO:0006355)	3780	43	86.05	-	.50	5.90E-08	7.66E-05
+carboxylic acid metabolic process (GO:0019752)	903	48	20.56	+	2.34	1.24E-07	1.49E-04
+regulation of macromolecule biosynthetic process (GO:0010556)	4313	54	98.18	-	.55	1.47E-07	1.64E-04
+cofactor metabolic process (GO:0051186)	490	32	11.15	+	2.87	2.72E-07	2.83E-04
+regulation of hormone levels (GO:0010817)	517	33	11.77	+	2.80	2.88E-07	2.80E-04
+regulation of cellular macromolecule biosynthetic process (GO:2000112)	4219	53	96.04	-	.55	2.90E-07	2.66E-04
+regulation of nucleobase-containing compound metabolic process (GO:0019219)	4353	57	99.09	-	.58	7.46E-07	6.46E-04
+small molecule catabolic process (GO:0044282)	416	28	9.47	+	2.96	8.78E-07	7.21E-04
+RNA biosynthetic process (GO:0032774)	2623	27	59.71	-	.45	1.04E-06	8.15E-04
+hormone metabolic process (GO:0042445)	192	18	4.37	+	4.12	1.20E-06	8.89E-04
+transcription, DNA-templated (GO:0006351)	2613	27	59.48	-	.45	1.39E-06	9.82E-04
+nucleic acid-templated transcription (GO:0097659)	2614	27	59.51	-	.45	1.39E-06	9.41E-04
+lipid metabolic process (GO:0006629)	1253	57	28.52	+	2.00	1.47E-06	9.53E-04
+carbohydrate metabolic process (GO:0005975)	506	31	11.52	+	2.69	1.50E-06	9.35E-04
+regulation of biosynthetic process (GO:0009889)	4559	62	103.78	-	.60	1.54E-06	9.25E-04
+regulation of cellular biosynthetic process (GO:0031326)	4488	61	102.16	-	.60	1.81E-06	1.04E-03
+lipid catabolic process (GO:0016042)	289	22	6.58	+	3.34	2.08E-06	1.16E-03
+xenobiotic metabolic process (GO:0006805)	124	14	2.82	+	4.96	2.58E-06	1.39E-03
+cellular hormone metabolic process (GO:0034754)	110	13	2.50	+	5.19	3.71E-06	1.93E-03
+cellular macromolecule biosynthetic process (GO:0034645)	3718	48	84.64	-	.57	4.56E-06	2.29E-03
+dicarboxylic acid metabolic process (GO:0043648)	106	12	2.41	+	4.97	1.30E-05	6.34E-03
+isoprenoid metabolic process (GO:0006720)	126	13	2.87	+	4.53	1.43E-05	6.74E-03
+monocarboxylic acid metabolic process (GO:0032787)	504	29	11.47	+	2.53	1.55E-05	7.10E-03
+macromolecule biosynthetic process (GO:0009059)	3776	51	85.96	-	.59	1.63E-05	7.26E-03
+regulation of macromolecule metabolic process (GO:0060255)	6316	102	143.78	-	.71	2.61E-05	1.13E-02
+hormone biosynthetic process (GO:0042446)	62	9	1.41	+	6.38	2.72E-05	1.15E-02
+cellular response to xenobiotic stimulus (GO:0071466)	177	15	4.03	+	3.72	2.78E-05	1.14E-02
+regulation of nitrogen compound metabolic process (GO:0051171)	6116	99	139.22	-	.71	4.31E-05	1.72E-02
+steroid catabolic process (GO:0006706)	26	6	.59	+	10.14	6.53E-05	2.55E-02
+terpenoid metabolic process (GO:0006721)	108	11	2.46	+	4.47	7.19E-05	2.74E-02
+steroid biosynthetic process (GO:0006694)	130	12	2.96	+	4.05	8.21E-05	3.05E-02
+androgen metabolic process (GO:0008209)	28	6	.64	+	9.41	9.33E-05	3.39E-02
+detection of chemical stimulus involved in sensory perception of smell (GO:0050911)	429	0	9.77	-	 < 0.01	9.60E-05	3.40E-02
+response to xenobiotic stimulus (GO:0009410)	278	18	6.33	+	2.84	1.25E-04	4.33E-02
+cellular lipid metabolic process (GO:0044255)	1003	43	22.83	+	1.88	1.37E-04	4.65E-02
+steroid metabolic process (GO:0008202)	255	17	5.80	+	2.93	1.38E-04	4.58E-02
+regulation of cellular glucuronidation (GO:2001029)	9	4	.20	+	19.52	1.48E-04	4.80E-02

@@ -1,24 +1,12 @@
-# Cross-tissue project
+# Cross-tissue co-expression networks in STARNET
 
-This is the main project repository for STARNET cross-tissue analyses.
+Repository for STARNET cross-tissue analyses of data on multitissue gene expression and genotyping of patients with Coronary Artery Disease. The project uses weighted gene co-expression network analysis (WGCNA) across multiple tissues, followed by GENIE3 for inference of gene regulatory networks, which are analyzed by weighted key driver analysis (Mergeomics R package).
+In addition, we construct a directed supernetwork of co-expression module eigengenes to model the progression of disease states. We also infer endocrine signaling from cross-tissue co-expression patterns.
 
+Note that the code base includes legacy analyses, not included in the final manuscript.
 
-# Data access on Minerva
-
-## Aligned data
-Oscars alignment (STAR) and counts (HT-seq) of STARNET data:
-/sc/orga/projects/STARNET/oscar/rna_editing/Raw/gene_exp/matrices/
-
-# isoforms
-/sc/orga/projects/STARNET/oscar/rna_editing/isoforms
-
-## Raw sequncing data
-/sc/orga/projects/STARNET/Tissues.RNA-seq.raw
-
-# Covariate data
-use phenotype data
+# Interactive browser
+Interactive browser to visualize the data and perform gene set enrichment analysis along with gene and SNP lookup is available at:
+http://starnet.mssm.edu/
 
 
-
-<!-- /hpc/users/koples01/links/STARNET/expression/normalized.cases/covariates.tbl -->
-<!-- /hpc/users/koples01/links/STARNET/expression/normalized.controls/covariates.tbl -->

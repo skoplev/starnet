@@ -309,7 +309,7 @@ dev.off()
 
 # sec_info = sec_info[order(abs(sec_info$endo_eigen_cor), decreasing=TRUE), ]
 
-
+colnames(mod_tab)[1] = "clust"
 
 sec_info_modules = merge(sec_info,
 	mod_tab[,
@@ -343,7 +343,7 @@ sec_info_modules = merge(sec_info,
 	by="clust")
 
 # Order by association
-sec_info_modules = sec_info_modules[order(abs(sec_info_modules$eigen_cor), decreasing=TRUE), ]
+sec_info_modules = sec_info_modules[order(abs(sec_info_modules$endo_eigen_cor), decreasing=TRUE), ]
 
 write.csv(sec_info_modules, "co-expression/tables/CT_endocrines.csv", row.names=FALSE)
 

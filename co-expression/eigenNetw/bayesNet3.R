@@ -447,7 +447,7 @@ plotNetw = function(g, name, mod_sel, lay, shape="circle", ...) {
 	# }
 
 	# Hide vertices without any edges
-	g = hideVertices(g, degree(g) == 0)
+	g = hideVertices(g, igraph::degree(g) == 0)
 
 	pdf(paste0("co-expression/eigenNetw/v3/igraph/by_", name, "_", mod_sel, ".pdf"),
 		width=20, height=20)

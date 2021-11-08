@@ -293,6 +293,7 @@ mod_val = data.frame(
 	p_ct=p_val_ct,
 	n_genes=n_genes
 )
+write.csv(mod_val, file="~/DataProjects/STARNET/moduleVali/valGTEx_mod_val.csv", row.names=FALSE)
 
 stopifnot(all(mod_tab[, 1] == mod_val$clust))
 

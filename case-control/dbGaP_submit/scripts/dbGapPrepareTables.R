@@ -160,7 +160,7 @@ new_subject_sample_map = rbind(subject_sample_map, new_subject_sample_map)
 # Assign unique sample names to resequenced samples
 new_subject_sample_map$SAMPLE_ID = make.unique(new_subject_sample_map$SAMPLE_ID)
 
-write.table(new_subject_sample_map, "case-control/dbGaP_submit/data/subject_mapping_data.txt",
+write.table(new_subject_sample_map, "case-control/dbGaP_submit/data/subject_sample_mapping_data.txt",
 	sep="\t",
 	row.names=FALSE,
 	quote=FALSE)
